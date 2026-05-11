@@ -6,6 +6,7 @@ final class TypoEngine {
     private let suggester = SuggestionEngine()
 
     private var buffer: String = ""
+    private var precededBySpace: Bool = false
 
     // Set after a word boundary when a typo is detected.
     // Cleared on the next keystroke (consumed or dismissed).
@@ -63,25 +64,32 @@ final class TypoEngine {
                 buffer.append(s)
             } else {
                 buffer.removeAll()
+                precededBySpace = false
             }
         case .backspace:
             if !buffer.isEmpty { buffer.removeLast() }
         case .caretMove, .modifierCombo:
             buffer.removeAll()
+            precededBySpace = false
         case .wordBoundary(let boundary):
             let word = buffer
+            let waspreceded = precededBySpace
             buffer.removeAll()
+            precededBySpace = boundary == " "
             if word.count >= TyproSettings.shared.minWordLength {
-                evaluate(word: word, boundary: boundary)
+                evaluate(word: word, boundary: boundary, precededBySpace: waspreceded)
             }
         }
     }
 
-    private func evaluate(word: String, boundary: String) {
+    private func evaluate(word: String, boundary: String, precededBySpace: Bool) {
         let language = TyproSettings.shared.language
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             guard let suggestion = self.suggester.suggest(for: word, language: language) else { return }
+            // Skip if not preceded by a space, unless the suggestion is capitalized (start of sentence / proper noun)
+            let suggestionIsCapitalized = suggestion.suggestion.first?.isUppercase == true
+            guard precededBySpace || suggestionIsCapitalized else { return }
             DispatchQueue.main.async {
                 NSLog("[Typro] pending fix: '\(suggestion.typed)' → '\(suggestion.suggestion)'")
                 self.pending = (suggestion, boundary)
