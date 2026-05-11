@@ -23,20 +23,23 @@ enum KeyPoster {
         guard count > 0 else { return }
         for _ in 0..<count {
             post(keyCode: CGKeyCode(kVK_Delete), flags: [])
+            usleep(8_000)
         }
     }
 
     static func type(_ string: String) {
-        guard let src = CGEventSource(stateID: .hidSystemState) else { return }
-        // Small inter-event delay so the receiving app processes each keystroke in order.
         let delay: useconds_t = 8_000
         for scalar in string.unicodeScalars {
-            guard let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true) else { continue }
             var c = UniChar(scalar.value)
-            event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &c)
-            event.post(tap: .cghidEventTap)
-            let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
-            up?.post(tap: .cghidEventTap)
+            // Passing nil source is accepted and works in most apps including terminals.
+            guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true) else { continue }
+            down.keyboardSetUnicodeString(stringLength: 1, unicodeString: &c)
+            down.post(tap: .cghidEventTap)
+
+            guard let up = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: false) else { continue }
+            up.keyboardSetUnicodeString(stringLength: 1, unicodeString: &c)
+            up.post(tap: .cghidEventTap)
+
             usleep(delay)
         }
     }
