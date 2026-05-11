@@ -33,6 +33,19 @@ On first launch, Typro will ask for **Accessibility permission** — this is req
 
 Then relaunch with `swift run`.
 
+## Website demo
+
+The showcase is a React + TypeScript app powered by Node tooling.
+
+```bash
+cd website
+npm install
+npm run dev
+```
+
+Then open the local URL printed by Vite to try the browser demo and download the
+project ZIP from the page.
+
 ## Preferences
 
 Click the menu-bar icon → **Preferences…**
