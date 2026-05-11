@@ -9,12 +9,16 @@ final class TypoEngine {
     private var buffer: String = ""
 
     private var pending: (typed: String, correction: String, boundary: String)?
-    private var suppressCount: Int = 0
 
     // Guard the space we just appended after an autofix. If the user hits backspace
-    // within this window, they likely meant to trigger an older fix — preserve the space.
+    // within this window, their BS is likely racing the just-inserted space — swallow it.
     private var spaceGuardUntil: Date?
     private let spaceGuardWindow: TimeInterval = 0.35
+
+    // Track rapid backspaces to promote to word-delete.
+    private var backspaceHistory: [Date] = []
+    private let rapidBackspaceThreshold = 3
+    private let rapidBackspaceWindow: TimeInterval = 0.45
 
     private let autoFixConfidenceThreshold: Double = 0.8
 
@@ -32,7 +36,10 @@ final class TypoEngine {
 
     func stop() {
         monitor.stop()
-        stateQueue.sync { buffer.removeAll(); pending = nil }
+        stateQueue.sync {
+            buffer.removeAll(); pending = nil
+            spaceGuardUntil = nil; backspaceHistory.removeAll()
+        }
     }
 
     func settingsChanged() {
@@ -40,44 +47,19 @@ final class TypoEngine {
     }
 
     private func handleSync(_ event: KeyEvent) -> Bool {
-        if suppressCount > 0 { suppressCount -= 1; return false }
-
         let frontBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         guard TyproSettings.shared.shouldActivate(forBundleID: frontBundleID) else {
-            buffer.removeAll(); pending = nil; spaceGuardUntil = nil; return false
+            buffer.removeAll(); pending = nil
+            spaceGuardUntil = nil; backspaceHistory.removeAll()
+            return false
         }
 
         if case .backspace = event.kind {
-            // Double-BS guard: within the window after an autofix with a trailing space,
-            // the user's second BS is almost certainly hitting our inserted space.
-            // Swallow it so the space stays.
-            if let until = spaceGuardUntil, Date() < until {
-                NSLog("[Typro] space-guard: swallowing backspace to preserve inserted space")
-                spaceGuardUntil = nil
-                return true
-            }
-
-            if let p = pending {
-                pending = nil
-                swallowAndApply(typed: p.typed, correction: p.correction, boundary: p.boundary, addedSpace: false)
-                return true
-            }
-
-            // Mid-word: swallow and either fix or delete whole word.
-            let word = buffer
-            guard word.count >= TyproSettings.shared.minWordLength else {
-                if !buffer.isEmpty { buffer.removeLast() }
-                return false
-            }
-            buffer.removeAll()
-            if let s = suggester.suggest(for: word, language: TyproSettings.shared.language) {
-                swallowAndApply(typed: word, correction: s.suggestion, boundary: "", addedSpace: false)
-            } else {
-                deleteWholeWord(word)
-            }
-            return true
+            return handleBackspace()
         }
 
+        // Any non-backspace clears rapid-delete state.
+        backspaceHistory.removeAll()
         pending = nil
         spaceGuardUntil = nil
 
@@ -104,7 +86,6 @@ final class TypoEngine {
             guard word.count >= TyproSettings.shared.minWordLength else { return false }
 
             if let fixed = PunctuationFixer.fix(word: word, boundary: boundary) {
-                // Punctuation fixes are high-confidence by nature — auto-apply.
                 autoApply(typed: word, correction: fixed, boundary: boundary)
                 return false
             }
@@ -114,6 +95,56 @@ final class TypoEngine {
         case .backspace:
             break
         }
+        return false
+    }
+
+    private func handleBackspace() -> Bool {
+        // 1. Recent space inserted by us? Swallow this BS so the space survives.
+        if let until = spaceGuardUntil, Date() < until {
+            NSLog("[Typro] space-guard: swallow BS")
+            spaceGuardUntil = nil
+            return true
+        }
+
+        // 2. A pending (low-confidence) fix waiting for confirmation?
+        if let p = pending {
+            pending = nil
+            backspaceHistory.removeAll()
+            applyFixAsync(typed: p.typed, correction: p.correction, boundary: p.boundary)
+            return true
+        }
+
+        // 3. Buffer has a mid-word state — try to fix or delete the whole word.
+        let word = buffer
+        if word.count >= TyproSettings.shared.minWordLength {
+            buffer.removeAll()
+            backspaceHistory.removeAll()
+            if let s = suggester.suggest(for: word, language: TyproSettings.shared.language) {
+                applyFixAsync(typed: word, correction: s.suggestion, boundary: "")
+            } else {
+                deleteWholeWordAsync(word)
+            }
+            return true
+        }
+
+        // 4. No word fix available. Count rapid backspaces; after N in quick succession,
+        //    promote to option+backspace (delete previous word). Otherwise pass through.
+        let now = Date()
+        backspaceHistory = backspaceHistory.filter { now.timeIntervalSince($0) < rapidBackspaceWindow }
+        backspaceHistory.append(now)
+
+        if backspaceHistory.count >= rapidBackspaceThreshold {
+            backspaceHistory.removeAll()
+            buffer.removeAll()
+            NSLog("[Typro] rapid BS → delete previous word")
+            DispatchQueue.global(qos: .userInitiated).async {
+                KeyPoster.optionBackspace(1)
+            }
+            return true
+        }
+
+        // Clear one letter from buffer (mirrors the user's actual BS).
+        if !buffer.isEmpty { buffer.removeLast() }
         return false
     }
 
@@ -134,52 +165,42 @@ final class TypoEngine {
         }
     }
 
-    // Auto-apply without requiring a backspace. User has just typed the boundary char;
-    // the word and boundary are already in the doc. Delete them and retype correction + boundary.
+    /// Apply when the trailing boundary is already in the document (user just typed it).
+    /// Delete word + boundary, retype correction + boundary.
     private func autoApply(typed: String, correction: String, boundary: String) {
         DispatchQueue.global(qos: .userInitiated).async {
             let deleteCount = typed.count + (boundary.isEmpty ? 0 : 1)
             let retyped = correction + boundary
-            self.stateQueue.sync { self.suppressCount += deleteCount + retyped.unicodeScalars.count }
             KeyPoster.backspace(deleteCount)
             KeyPoster.type(retyped)
-            // Protect the appended space from an immediate follow-up BS.
             if boundary == " " {
                 self.stateQueue.async { self.spaceGuardUntil = Date().addingTimeInterval(self.spaceGuardWindow) }
             }
         }
     }
 
-    private func swallowAndApply(typed: String, correction: String, boundary: String, addedSpace: Bool) {
+    /// Apply when the user's backspace was swallowed. Doc state matches the word+boundary still being there.
+    private func applyFixAsync(typed: String, correction: String, boundary: String) {
         DispatchQueue.global(qos: .userInitiated).async {
-            self.applyFix(typed: typed, correction: correction, boundary: boundary)
+            if typed == " " && boundary.isEmpty {
+                // space-before-punct: delete trailing space + punct, retype punct.
+                KeyPoster.backspace(2)
+                KeyPoster.type(correction)
+                return
+            }
+            let deleteCount = typed.count + (boundary.isEmpty ? 0 : 1)
+            let retyped = correction + boundary
+            KeyPoster.backspace(deleteCount)
+            KeyPoster.type(retyped)
+            if boundary == " " {
+                self.stateQueue.async { self.spaceGuardUntil = Date().addingTimeInterval(self.spaceGuardWindow) }
+            }
         }
     }
 
-    private func applyFix(typed: String, correction: String, boundary: String) {
-        if typed == " " && boundary.isEmpty {
-            NSLog("[Typro] apply space-before-punct")
-            stateQueue.sync { suppressCount += 2 }
-            KeyPoster.backspace(2)
-            KeyPoster.type(correction)
-            return
-        }
-
-        let deleteCount = typed.count + (boundary.isEmpty ? 0 : 1)
-        let retyped = correction + boundary
-        NSLog("[Typro] apply fix: delete \(deleteCount), type '\(retyped)'")
-        stateQueue.sync { suppressCount += deleteCount + retyped.unicodeScalars.count }
-        KeyPoster.backspace(deleteCount)
-        KeyPoster.type(retyped)
-        if boundary == " " {
-            stateQueue.async { self.spaceGuardUntil = Date().addingTimeInterval(self.spaceGuardWindow) }
-        }
-    }
-
-    private func deleteWholeWord(_ word: String) {
+    private func deleteWholeWordAsync(_ word: String) {
         NSLog("[Typro] no suggestion, deleting whole word '\(word)'")
         DispatchQueue.global(qos: .userInitiated).async {
-            self.stateQueue.sync { self.suppressCount += word.count }
             KeyPoster.backspace(word.count)
         }
     }

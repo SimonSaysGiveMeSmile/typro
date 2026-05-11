@@ -89,6 +89,10 @@ final class KeyMonitor {
             callback: { _, type, event, refcon in
                 guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<KeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
+                // Ignore events we posted ourselves — they carry our tag.
+                if event.getIntegerValueField(.eventSourceUserData) == KeyPoster.typroTag {
+                    return Unmanaged.passUnretained(event)
+                }
                 if type == .keyDown, let ke = KeyEvent(cgEvent: event) {
                     // Run synchronously on the tap thread so we can swallow the event.
                     if monitor.shouldSwallow?(ke) == true {
