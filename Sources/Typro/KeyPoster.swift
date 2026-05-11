@@ -19,9 +19,23 @@ enum KeyPoster {
         post(keyCode: CGKeyCode(kVK_LeftArrow), flags: [])
     }
 
-    /// Move caret right one — used to restore position past the boundary char after an early return.
-    static func arrowRight() {
-        post(keyCode: CGKeyCode(kVK_RightArrow), flags: [])
+    static func backspace(_ count: Int = 1) {
+        guard count > 0 else { return }
+        for _ in 0..<count {
+            post(keyCode: CGKeyCode(kVK_Delete), flags: [])
+        }
+    }
+
+    static func type(_ string: String) {
+        guard let src = CGEventSource(stateID: .hidSystemState) else { return }
+        for scalar in string.unicodeScalars {
+            guard let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true) else { continue }
+            var c = UniChar(scalar.value)
+            event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &c)
+            event.post(tap: .cghidEventTap)
+            let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
+            up?.post(tap: .cghidEventTap)
+        }
     }
 
     private static func post(keyCode: CGKeyCode, flags: CGEventFlags) {

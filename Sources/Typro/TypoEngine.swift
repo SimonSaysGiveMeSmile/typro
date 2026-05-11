@@ -1,18 +1,17 @@
 import Foundation
 import AppKit
 
-/// Orchestrates: keystroke buffer → spell-check on word boundary →
-/// select the wrong suffix so the user can delete it with one tap.
 final class TypoEngine {
     private let monitor = KeyMonitor()
     private let suggester = SuggestionEngine()
 
     private var buffer: String = ""
-    private var lastSuggestion: TypoSuggestion?
 
-    /// After we post selection events, the next keystrokes are our own shift+left.
-    /// The system will still deliver them through our tap — ignore them to avoid
-    /// feedback loops.
+    // Set after a word boundary when a typo is detected.
+    // Cleared on the next keystroke (consumed or dismissed).
+    private var pending: (suggestion: TypoSuggestion, boundary: String)?
+
+    // Suppress our own synthetic events from re-entering the handler.
     private var ignoreEventsUntil: Date?
 
     func start() {
@@ -27,11 +26,12 @@ final class TypoEngine {
     func stop() {
         monitor.stop()
         buffer.removeAll()
+        pending = nil
     }
 
     func settingsChanged() {
         if TyproSettings.shared.enabled {
-            if monitor.start() == false { /* already running */ }
+            _ = monitor.start()
         } else {
             stop()
         }
@@ -43,9 +43,19 @@ final class TypoEngine {
 
         let frontBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         guard TyproSettings.shared.shouldActivate(forBundleID: frontBundleID) else {
-            buffer.removeAll()
+            buffer.removeAll(); pending = nil
             return
         }
+
+        // If a suggestion is waiting and the user hits backspace, auto-fix.
+        if case .backspace = event.kind, let p = pending {
+            pending = nil
+            applyFix(p.suggestion, boundary: p.boundary)
+            return
+        }
+
+        // Any other key dismisses the pending suggestion without acting.
+        pending = nil
 
         switch event.kind {
         case .character(let s):
@@ -58,36 +68,34 @@ final class TypoEngine {
             if !buffer.isEmpty { buffer.removeLast() }
         case .caretMove, .modifierCombo:
             buffer.removeAll()
-        case .wordBoundary:
+        case .wordBoundary(let boundary):
             let word = buffer
             buffer.removeAll()
             if word.count >= TyproSettings.shared.minWordLength {
-                evaluate(word: word)
+                evaluate(word: word, boundary: boundary)
             }
         }
     }
 
-    private func evaluate(word: String) {
+    private func evaluate(word: String, boundary: String) {
         let language = TyproSettings.shared.language
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             guard let suggestion = self.suggester.suggest(for: word, language: language) else { return }
-            DispatchQueue.main.async { self.applySelection(suggestion) }
+            DispatchQueue.main.async {
+                NSLog("[Typro] pending fix: '\(suggestion.typed)' → '\(suggestion.suggestion)'")
+                self.pending = (suggestion, boundary)
+            }
         }
     }
 
-    private func applySelection(_ suggestion: TypoSuggestion) {
-        NSLog("[Typro] typo '\(suggestion.typed)' → '\(suggestion.suggestion)', selecting last \(suggestion.wrongSuffixLength)")
-        lastSuggestion = suggestion
-
-        // Swallow our own synthetic events for a short window so the tap
-        // does not loop them back into the buffer.
-        ignoreEventsUntil = Date().addingTimeInterval(0.25)
-
-        // 1. caret was just placed after the boundary char (e.g. space).
-        //    Step caret back past that boundary char.
-        KeyPoster.arrowLeft()
-        // 2. Select the wrong suffix.
-        KeyPoster.selectLeft(suggestion.wrongSuffixLength)
+    private func applyFix(_ suggestion: TypoSuggestion, boundary: String) {
+        NSLog("[Typro] applying fix: '\(suggestion.typed)' → '\(suggestion.suggestion)'")
+        // Suppress the synthetic events we're about to post.
+        // typed.count + 1 (boundary) backspaces, then type correction + boundary.
+        let deleteCount = suggestion.typed.count + 1
+        ignoreEventsUntil = Date().addingTimeInterval(Double(deleteCount + suggestion.suggestion.count + 1) * 0.02 + 0.1)
+        KeyPoster.backspace(deleteCount)
+        KeyPoster.type(suggestion.suggestion + boundary)
     }
 }
