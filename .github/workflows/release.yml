@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build release binaries
+        run: |
+          swift build -c release --product Typro
+          swift build -c release --product typro-fix
+
+      - name: Package artifacts
+        run: |
+          mkdir -p dist
+          cp .build/release/Typro dist/
+          cp .build/release/typro-fix dist/
+          cp install.sh dist/
+          cd dist && zip -r ../typro-${{ github.ref_name }}.zip .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: typro-${{ github.ref_name }}.zip
+          generate_release_notes: true
