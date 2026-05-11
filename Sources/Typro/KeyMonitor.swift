@@ -73,6 +73,8 @@ final class KeyMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     var onEvent: ((KeyEvent) -> Void)?
+    // Called synchronously. Return true to swallow the event (drop it).
+    var shouldSwallow: ((KeyEvent) -> Bool)?
 
     func start() -> Bool {
         stop()
@@ -82,13 +84,17 @@ final class KeyMonitor {
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
-            options: .listenOnly,
+            options: .defaultTap,
             eventsOfInterest: mask,
             callback: { _, type, event, refcon in
                 guard let refcon = refcon else { return Unmanaged.passUnretained(event) }
                 let monitor = Unmanaged<KeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
                 if type == .keyDown, let ke = KeyEvent(cgEvent: event) {
-                    DispatchQueue.main.async { monitor.onEvent?(ke) }
+                    // Run synchronously on the tap thread so we can swallow the event.
+                    if monitor.shouldSwallow?(ke) == true {
+                        return nil
+                    }
+                    monitor.onEvent?(ke)
                 } else if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
                     if let tap = monitor.eventTap { CGEvent.tapEnable(tap: tap, enable: true) }
                 }

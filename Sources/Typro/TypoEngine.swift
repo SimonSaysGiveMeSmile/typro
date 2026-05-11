@@ -5,18 +5,22 @@ final class TypoEngine {
     private let monitor = KeyMonitor()
     private let suggester = SuggestionEngine()
 
+    private let stateQueue = DispatchQueue(label: "typro.state")
     private var buffer: String = ""
     private var precededBySpace: Bool = false
 
-    // Pending fix waiting for a backspace to confirm.
-    // typed: the misspelled word as typed; correction: replacement; boundary: boundary char typed after word (or "" for mid-word).
+    // Pending fix waiting for a backspace to trigger.
     private var pending: (typed: String, correction: String, boundary: String)?
 
-    // Count of synthetic key events still in flight — ignore that many incoming events.
+    // Remaining synthetic keyDown events to ignore.
     private var suppressCount: Int = 0
 
     func start() {
-        monitor.onEvent = { [weak self] in self?.handle($0) }
+        // shouldSwallow runs synchronously on the tap thread.
+        monitor.shouldSwallow = { [weak self] event in
+            guard let self else { return false }
+            return self.stateQueue.sync { self.handleSync(event) }
+        }
         guard monitor.start() else {
             NSLog("[Typro] Failed to create event tap. Accessibility permission likely missing.")
             return
@@ -26,42 +30,42 @@ final class TypoEngine {
 
     func stop() {
         monitor.stop()
-        buffer.removeAll()
-        pending = nil
+        stateQueue.sync { buffer.removeAll(); pending = nil }
     }
 
     func settingsChanged() {
         if TyproSettings.shared.enabled { _ = monitor.start() } else { stop() }
     }
 
-    private func handle(_ event: KeyEvent) {
-        if suppressCount > 0 { suppressCount -= 1; return }
+    // Called on tap thread. Returns true to swallow the event.
+    private func handleSync(_ event: KeyEvent) -> Bool {
+        if suppressCount > 0 { suppressCount -= 1; return false }
 
         let frontBundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
         guard TyproSettings.shared.shouldActivate(forBundleID: frontBundleID) else {
-            buffer.removeAll(); pending = nil; return
+            buffer.removeAll(); pending = nil; return false
         }
 
-        if case .backspace = event.kind {
-            // 1. Pending from a word-boundary? Apply it.
-            if let p = pending {
-                pending = nil
-                applyPostBoundaryFix(typed: p.typed, correction: p.correction, boundary: p.boundary)
-                return
+        if case .backspace = event.kind, let p = pending {
+            // Swallow the user's backspace entirely. We replace the text ourselves.
+            pending = nil
+            let typed = p.typed, correction = p.correction, boundary = p.boundary
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.applyFix(typed: typed, correction: correction, boundary: boundary)
             }
-            // 2. Mid-word backspace: the OS is about to delete one char from the buffer.
-            //    Check if the pre-deletion buffer has a fix; if so, apply it.
-            let preBuffer = buffer
-            if !buffer.isEmpty { buffer.removeLast() }
-            if preBuffer.count >= TyproSettings.shared.minWordLength, precededBySpace {
-                evaluateMidWord(word: preBuffer)
-            }
-            return
+            return true
         }
 
         pending = nil
 
         switch event.kind {
+        case .backspace:
+            let preBuffer = buffer
+            if !buffer.isEmpty { buffer.removeLast() }
+            if preBuffer.count >= TyproSettings.shared.minWordLength, precededBySpace {
+                scheduleMidWordSuggest(word: preBuffer)
+            }
+
         case .character(let s):
             if s.count == 1, s.first?.isLetter == true {
                 buffer.append(s)
@@ -80,74 +84,72 @@ final class TypoEngine {
             buffer.removeAll()
             precededBySpace = (boundary == " ")
 
-            // Space-before-punctuation: "word ," — buffer is empty after the space.
             if word.isEmpty && wasSpace && PunctuationFixer.isSpaceBeforePunct(boundary) {
-                NSLog("[Typro] space-before-punct pending")
                 pending = (" ", boundary, "")
-                return
+                return false
             }
 
-            guard word.count >= TyproSettings.shared.minWordLength else { return }
+            guard word.count >= TyproSettings.shared.minWordLength else { return false }
 
             if let fixed = PunctuationFixer.fix(word: word, boundary: boundary) {
                 let isCap = fixed.first?.isUppercase == true
-                guard wasSpace || isCap else { return }
-                NSLog("[Typro] punct pending: '\(word)' → '\(fixed)'")
-                pending = (word, fixed, boundary)
-                return
-            }
-
-            let language = TyproSettings.shared.language
-            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                guard let self else { return }
-                guard let s = self.suggester.suggest(for: word, language: language) else { return }
-                let isCap = s.suggestion.first?.isUppercase == true
-                guard wasSpace || isCap else { return }
-                DispatchQueue.main.async {
-                    NSLog("[Typro] spell pending: '\(s.typed)' → '\(s.suggestion)'")
-                    self.pending = (s.typed, s.suggestion, boundary)
+                if wasSpace || isCap {
+                    pending = (word, fixed, boundary)
                 }
+                return false
             }
 
-        case .backspace:
-            break // handled above
+            scheduleSpellSuggest(word: word, boundary: boundary, wasSpace: wasSpace)
         }
+        return false
     }
 
-    // Mid-word backspace: user deleted the last char of `word` while typing.
-    // Offer a fix — next backspace will apply it.
-    private func evaluateMidWord(word: String) {
+    private func scheduleMidWordSuggest(word: String) {
         let language = TyproSettings.shared.language
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             guard let s = self.suggester.suggest(for: word, language: language) else { return }
-            DispatchQueue.main.async {
+            self.stateQueue.async {
                 NSLog("[Typro] mid-word pending: '\(s.typed)' → '\(s.suggestion)'")
-                // boundary is "" — mid-word, no trailing char to restore.
-                // typed is the pre-deletion word, but one char is already gone from the doc.
+                // One char was already deleted. Typed-in-doc is word.dropLast().
                 self.pending = (String(s.typed.dropLast()), s.suggestion, "")
             }
         }
     }
 
-    // Apply a fix queued from a word-boundary event.
-    // The user just pressed backspace, so the OS already deleted the boundary char.
-    // We need to: delete the typed word chars, then type correction + boundary.
-    private func applyPostBoundaryFix(typed: String, correction: String, boundary: String) {
-        // Space-before-punct special case: typed is " ", correction is punct, boundary is "".
-        // The user's backspace already deleted the punct. Now delete the space + retype punct.
+    private func scheduleSpellSuggest(word: String, boundary: String, wasSpace: Bool) {
+        let language = TyproSettings.shared.language
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            guard let s = self.suggester.suggest(for: word, language: language) else { return }
+            let isCap = s.suggestion.first?.isUppercase == true
+            guard wasSpace || isCap else { return }
+            self.stateQueue.async {
+                NSLog("[Typro] spell pending: '\(s.typed)' → '\(s.suggestion)'")
+                self.pending = (s.typed, s.suggestion, boundary)
+            }
+        }
+    }
+
+    // Runs off tap thread. User's backspace was swallowed — we control the text entirely.
+    private func applyFix(typed: String, correction: String, boundary: String) {
+        // Space-before-punct: " ," with user's BS swallowed. The punct is still there.
+        // Delete punct + space (2), retype punct.
         if typed == " " && boundary.isEmpty {
             NSLog("[Typro] apply space-before-punct")
-            suppressCount = 1 * 2 + correction.unicodeScalars.count * 2
-            KeyPoster.backspace(1)
+            stateQueue.sync { suppressCount += 2 }
+            KeyPoster.backspace(2)
             KeyPoster.type(correction)
             return
         }
 
-        NSLog("[Typro] apply post-boundary fix: delete \(typed.count), type '\(correction + boundary)'")
+        // Normal post-boundary fix: "teh " with user's BS swallowed — "teh " still in doc.
+        // Delete typed.count + (boundary ? 1 : 0), retype correction + boundary.
+        let deleteCount = typed.count + (boundary.isEmpty ? 0 : 1)
         let retyped = correction + boundary
-        suppressCount = typed.count * 2 + retyped.unicodeScalars.count * 2
-        KeyPoster.backspace(typed.count)
+        NSLog("[Typro] apply fix: delete \(deleteCount), type '\(retyped)'")
+        stateQueue.sync { suppressCount += deleteCount + retyped.unicodeScalars.count }
+        KeyPoster.backspace(deleteCount)
         KeyPoster.type(retyped)
     }
 }
