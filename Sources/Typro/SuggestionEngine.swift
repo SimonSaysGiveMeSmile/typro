@@ -29,9 +29,7 @@ final class SuggestionEngine {
         let prefix = commonPrefixLength(word.lowercased(), top.lowercased())
         let suffixLen = word.count - prefix
 
-        // Skip trivial diffs (1 char at very end is fine to auto-select, but a whole-word replace isn't useful)
         if suffixLen == 0 { return nil }
-        if suffixLen >= word.count { return nil } // no useful prefix; avoid whole-word selection
 
         return TypoSuggestion(typed: word, suggestion: top, wrongSuffixLength: suffixLen)
     }
