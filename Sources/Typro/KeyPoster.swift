@@ -28,6 +28,8 @@ enum KeyPoster {
 
     static func type(_ string: String) {
         guard let src = CGEventSource(stateID: .hidSystemState) else { return }
+        // Small inter-event delay so the receiving app processes each keystroke in order.
+        let delay: useconds_t = 8_000
         for scalar in string.unicodeScalars {
             guard let event = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: true) else { continue }
             var c = UniChar(scalar.value)
@@ -35,7 +37,13 @@ enum KeyPoster {
             event.post(tap: .cghidEventTap)
             let up = CGEvent(keyboardEventSource: src, virtualKey: 0, keyDown: false)
             up?.post(tap: .cghidEventTap)
+            usleep(delay)
         }
+    }
+
+    // Total synthetic events posted: used by TypoEngine to count what to suppress.
+    static func syntheticEventCount(deleteCount: Int, typeString: String) -> Int {
+        deleteCount * 2 + typeString.unicodeScalars.count * 2
     }
 
     private static func post(keyCode: CGKeyCode, flags: CGEventFlags) {
