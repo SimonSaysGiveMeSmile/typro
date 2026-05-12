@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: toggleTitle, action: #selector(toggleEnabled), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        menu.addItem(withTitle: "Show Correction Log", action: #selector(showCorrectionLog), keyEquivalent: "")
         menu.addItem(withTitle: "Check Accessibility Permission", action: #selector(checkPermissions), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Typro", action: #selector(quit), keyEquivalent: "q")
@@ -84,4 +85,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func showCorrectionLog() {
+        let url = CorrectionLog.shared.fileURLForDisplay
+        if !FileManager.default.fileExists(atPath: url.path) {
+            FileManager.default.createFile(atPath: url.path, contents: nil)
+        }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
 }

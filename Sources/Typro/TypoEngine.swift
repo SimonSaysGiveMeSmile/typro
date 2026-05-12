@@ -60,7 +60,7 @@ final class TypoEngine {
         }
 
         if case .backspace = event.kind {
-            return handleBackspace()
+            return handleBackspace(app: frontBundleID)
         }
 
         // Any non-backspace clears rapid-delete state.
@@ -73,6 +73,7 @@ final class TypoEngine {
             // Active apostrophe fix: ";" or ":" in a letter context becomes "'".
             if s == ";" || s == ":", !buffer.isEmpty, buffer.last?.isLetter == true {
                 NSLog("[Typro] active apostrophe fix: '\(s)' → '")
+                CorrectionLog.shared.record(.activeApostrophe, typed: s, correction: "'", app: frontBundleID)
                 DispatchQueue.global(qos: .userInitiated).async { KeyPoster.type("'") }
                 buffer.append("'")
                 lastPunctBoundary = nil
@@ -80,10 +81,9 @@ final class TypoEngine {
             }
 
             if s.count == 1, s.first?.isLetter == true {
-                // Missing space after punctuation: last boundary was "," "." "!" "?".
-                // Insert a space before this letter.
                 if let prev = lastPunctBoundary, prev != "" {
                     NSLog("[Typro] missing-space after '\(prev)' → inserting space")
+                    CorrectionLog.shared.record(.missingSpaceAfterPunct, typed: prev + s, correction: prev + " " + s, app: frontBundleID)
                     let letter = s
                     DispatchQueue.global(qos: .userInitiated).async {
                         KeyPoster.type(" " + letter)
@@ -106,7 +106,6 @@ final class TypoEngine {
             let word = buffer
             buffer.removeAll()
 
-            // Track whether this boundary is punctuation that should be followed by a space.
             if boundary == "," || boundary == "." || boundary == "!" || boundary == "?" {
                 lastPunctBoundary = boundary
             } else {
@@ -121,11 +120,12 @@ final class TypoEngine {
             guard word.count >= TyproSettings.shared.minWordLength else { return false }
 
             if let fixed = PunctuationFixer.fix(word: word, boundary: boundary) {
+                CorrectionLog.shared.record(.punctuation, typed: word, correction: fixed, boundary: boundary, app: frontBundleID)
                 autoApply(typed: word, correction: fixed, boundary: boundary)
                 return false
             }
 
-            scheduleSpellSuggest(word: word, boundary: boundary)
+            scheduleSpellSuggest(word: word, boundary: boundary, app: frontBundleID)
 
         case .backspace:
             break
@@ -133,40 +133,41 @@ final class TypoEngine {
         return false
     }
 
-    private func handleBackspace() -> Bool {
-        // Any backspace invalidates missing-space-after-punct tracking.
+    private func handleBackspace(app: String?) -> Bool {
         lastPunctBoundary = nil
 
-        // 1. Recent space inserted by us? Swallow this BS so the space survives.
         if let until = spaceGuardUntil, Date() < until {
             NSLog("[Typro] space-guard: swallow BS")
             spaceGuardUntil = nil
             return true
         }
 
-        // 2. A pending (low-confidence) fix waiting for confirmation?
         if let p = pending {
             pending = nil
             backspaceHistory.removeAll()
+            if p.typed == " " && p.boundary.isEmpty {
+                CorrectionLog.shared.record(.spaceBeforePunct, typed: " " + p.correction, correction: p.correction, app: app)
+            } else {
+                CorrectionLog.shared.record(.applyFromBackspace, typed: p.typed, correction: p.correction, boundary: p.boundary, app: app)
+            }
             applyFixAsync(typed: p.typed, correction: p.correction, boundary: p.boundary)
             return true
         }
 
-        // 3. Buffer has a mid-word state — try to fix or delete the whole word.
         let word = buffer
         if word.count >= TyproSettings.shared.minWordLength {
             buffer.removeAll()
             backspaceHistory.removeAll()
             if let s = suggester.suggest(for: word, language: TyproSettings.shared.language) {
+                CorrectionLog.shared.record(.applyFromBackspace, typed: word, correction: s.suggestion, confidence: s.confidence, app: app)
                 applyFixAsync(typed: word, correction: s.suggestion, boundary: "")
             } else {
+                CorrectionLog.shared.record(.deleteWholeWord, typed: word, correction: "", app: app)
                 deleteWholeWordAsync(word)
             }
             return true
         }
 
-        // 4. No word fix available. Count rapid backspaces; after N in quick succession,
-        //    promote to option+backspace (delete previous word). Otherwise pass through.
         let now = Date()
         backspaceHistory = backspaceHistory.filter { now.timeIntervalSince($0) < rapidBackspaceWindow }
         backspaceHistory.append(now)
@@ -175,28 +176,30 @@ final class TypoEngine {
             backspaceHistory.removeAll()
             buffer.removeAll()
             NSLog("[Typro] rapid BS → delete previous word")
+            CorrectionLog.shared.record(.rapidWordDelete, typed: "", correction: "", app: app)
             DispatchQueue.global(qos: .userInitiated).async {
                 KeyPoster.optionBackspace(1)
             }
             return true
         }
 
-        // Clear one letter from buffer (mirrors the user's actual BS).
         if !buffer.isEmpty { buffer.removeLast() }
         return false
     }
 
-    private func scheduleSpellSuggest(word: String, boundary: String) {
+    private func scheduleSpellSuggest(word: String, boundary: String, app: String?) {
         let language = TyproSettings.shared.language
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             guard let s = self.suggester.suggest(for: word, language: language) else { return }
             if s.confidence >= self.autoFixConfidenceThreshold {
                 NSLog("[Typro] auto-apply (conf \(String(format: "%.2f", s.confidence))): '\(s.typed)' → '\(s.suggestion)'")
+                CorrectionLog.shared.record(.autoApply, typed: s.typed, correction: s.suggestion, boundary: boundary, confidence: s.confidence, app: app)
                 self.autoApply(typed: s.typed, correction: s.suggestion, boundary: boundary)
             } else {
                 self.stateQueue.async {
                     NSLog("[Typro] pending (conf \(String(format: "%.2f", s.confidence))): '\(s.typed)' → '\(s.suggestion)'")
+                    CorrectionLog.shared.record(.pending, typed: s.typed, correction: s.suggestion, boundary: boundary, confidence: s.confidence, app: app)
                     self.pending = (s.typed, s.suggestion, boundary)
                 }
             }
