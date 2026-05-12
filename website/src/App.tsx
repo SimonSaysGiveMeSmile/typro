@@ -20,7 +20,7 @@ const corrections = new Map<string, string>([
   ["thier", "their"],
 ]);
 
-const examples = ["I typed teh ", "Try mistika ", "Please recieve ", "Wrong adress "];
+const examples = ["teh", "mistika", "recieve", "adress"];
 
 function findPendingFix(value: string): PendingFix | null {
   const match = value.match(/([A-Za-z']+)([ .,!?])$/);
@@ -49,147 +49,108 @@ function App() {
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Backspace" || !pending) return;
-
     event.preventDefault();
     setText(`${text.slice(0, pending.start)}${pending.corrected}${pending.boundary}`);
   };
 
-  const status = pending
-    ? {
-        word: pending.word,
-        suggestion: pending.corrected,
-        action: "Press Backspace to apply the repair.",
-      }
-    : {
-        word: "None",
-        suggestion: "Waiting",
-        action: "Type a demo typo followed by a space.",
-      };
-
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="Typro home">
-          <span className="brand-mark">T</span>
-          <span>Typro</span>
-        </a>
-        <nav aria-label="Primary navigation">
-          <a href="#demo">Demo</a>
-          <a href="#how">How it works</a>
-          <a href="#download">Download</a>
-        </nav>
+    <main className="page">
+      <header className="nav">
+        <span className="wordmark">Typro</span>
+        <span className="tag">macOS · menu bar</span>
       </header>
 
-      <section id="top" className="hero section-frame">
-        <div className="hero-copy">
-          <p className="eyebrow">macOS typing assistant</p>
-          <h1>Typo repair with a deliberate Delete tap.</h1>
-          <p>
-            Typro watches completed words, checks likely fixes on-device, and
-            replaces the typo only when you confirm it.
-          </p>
-          <div className="actions">
-            <a className="button primary" href="#demo">Try demo</a>
-            <a className="button ghost" href="/download/typro-project.zip" download>Download ZIP</a>
-          </div>
-        </div>
-
-        <div className="glass-terminal" aria-label="Typro example">
-          <div className="terminal-header">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          <div className="terminal-lines">
-            <p><b>You type</b><span>mistika </span></p>
-            <p><b>Typro sees</b><span>mistake</span></p>
-            <p><b>You press</b><span>Delete</span></p>
-            <p><b>Result</b><span>mistake </span></p>
-          </div>
+      <section className="hero">
+        <h1>Fix typos with one&nbsp;Delete.</h1>
+        <p className="lede">
+          Typro watches your typing, spots typos on-device, and selects the
+          wrong letters at the end of the word. Hit Delete, retype, move on.
+        </p>
+        <div className="cta">
+          <a className="btn primary" href="/download/typro-project.zip" download>
+            Download
+          </a>
+          <a className="btn ghost" href="#demo">Try the demo</a>
         </div>
       </section>
 
-      <section id="demo" className="demo section-frame">
-        <div className="section-title">
-          <p className="eyebrow">browser runtime</p>
-          <h2>Try the interaction safely.</h2>
-          <p>
-            This React demo runs only inside the page. It mirrors Typro's flow:
-            type a known typo, add a boundary, then press Backspace to accept.
-          </p>
+      <section id="demo" className="demo">
+        <div className="demo-head">
+          <h2>Try it</h2>
+          <p>Type a typo, add a space, then press Backspace.</p>
         </div>
 
-        <div className="demo-grid">
-          <div className="glass-panel">
-            <label htmlFor="demo-input">Demo field</label>
-            <textarea
-              id="demo-input"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-              placeholder="Try: teh, mistika, recieve, adress"
-            />
-            <div className="example-row">
-              {examples.map((example) => (
-                <button key={example} type="button" onClick={() => setText(example)}>
-                  {example.trim()}
-                </button>
-              ))}
-              <button type="button" onClick={() => setText("")}>Clear</button>
-            </div>
-          </div>
+        <textarea
+          id="demo-input"
+          className="field"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={handleKeyDown}
+          spellCheck={false}
+          placeholder="e.g. teh&nbsp;"
+          aria-label="Typo demo field"
+        />
 
-          <aside className="status glass-panel" aria-live="polite">
-            <h3>State</h3>
-            <div>
-              <span>Typed</span>
-              <strong>{status.word}</strong>
-            </div>
-            <div>
-              <span>Suggestion</span>
-              <strong>{status.suggestion}</strong>
-            </div>
-            <div>
-              <span>Next</span>
-              <strong>{status.action}</strong>
-            </div>
-          </aside>
+        <div className="hint" aria-live="polite">
+          {pending ? (
+            <>
+              <span className="from">{pending.word}</span>
+              <span className="arrow">→</span>
+              <span className="to">{pending.corrected}</span>
+              <span className="sep">·</span>
+              <span className="action">Press Delete to apply</span>
+            </>
+          ) : (
+            <span className="muted">Waiting for a typo + boundary…</span>
+          )}
         </div>
-      </section>
 
-      <section id="how" className="how section-frame">
-        <div className="section-title">
-          <p className="eyebrow">how it works</p>
-          <h2>Small buffer. Local check. Explicit repair.</h2>
-        </div>
-        <div className="steps">
-          <article>
-            <span>01</span>
-            <h3>Watch</h3>
-            <p>Typro keeps a short memory of the current word while you type.</p>
-          </article>
-          <article>
-            <span>02</span>
-            <h3>Suggest</h3>
-            <p>At a space or punctuation mark, it asks macOS for a likely correction.</p>
-          </article>
-          <article>
-            <span>03</span>
-            <h3>Apply</h3>
-            <p>If Delete is pressed next, Typro replaces the typo and preserves the boundary.</p>
-          </article>
+        <div className="chips">
+          {examples.map((word) => (
+            <button
+              key={word}
+              type="button"
+              onClick={() => setText(`${word} `)}
+            >
+              {word}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="chip-clear"
+            onClick={() => setText("")}
+          >
+            Clear
+          </button>
         </div>
       </section>
 
-      <section id="download" className="download section-frame">
+      <section className="how">
+        <ol>
+          <li>
+            <span className="num">01</span>
+            <b>Watch.</b> A short buffer tracks the word you&rsquo;re typing.
+          </li>
+          <li>
+            <span className="num">02</span>
+            <b>Check.</b> At a space or punctuation, macOS spell-check runs locally.
+          </li>
+          <li>
+            <span className="num">03</span>
+            <b>Apply.</b> Press Delete and Typro swaps the word, keeping the boundary.
+          </li>
+        </ol>
+      </section>
+
+      <footer className="foot">
         <div>
-          <p className="eyebrow">source package</p>
-          <h2>Download the project.</h2>
-          <p>The ZIP includes the Swift app source and this React TypeScript showcase.</p>
+          <p className="muted">macOS 14+ · Accessibility permission required.</p>
         </div>
-        <a className="button primary" href="/download/typro-project.zip" download>Download project</a>
-      </section>
+        <div className="foot-links">
+          <a href="https://github.com/SimonSaysGiveMeSmile/typro">Source</a>
+          <a href="/download/typro-project.zip" download>Download ZIP</a>
+        </div>
+      </footer>
     </main>
   );
 }

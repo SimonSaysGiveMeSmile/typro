@@ -6,3 +6,6 @@
 xcuserdata/
 *.xcworkspace/
 DerivedData/
+website/node_modules/
+website/dist/
+website/tsconfig.tsbuildinfo
