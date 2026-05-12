@@ -62,22 +62,24 @@ function App() {
 
       <section className="hero">
         <h1>Fix typos with one&nbsp;Delete.</h1>
-        <p className="lede">
-          Typro watches your typing, spots typos on-device, and selects the
-          wrong letters at the end of the word. Hit Delete, retype, move on.
-        </p>
-        <div className="cta">
-          <a className="btn primary" href="/download/typro-project.zip" download>
-            Download
-          </a>
-          <a className="btn ghost" href="#demo">Try the demo</a>
+        <div className="hero-right">
+          <p className="lede">
+            Typro watches your typing, spots typos on-device, and selects the
+            wrong letters at the end of the word. Hit Delete, retype, move on.
+          </p>
+          <div className="cta">
+            <a className="btn primary" href="/download/typro-project.zip" download>
+              Download
+            </a>
+            <a className="btn ghost" href="#demo">Try the demo</a>
+          </div>
         </div>
       </section>
 
       <section id="demo" className="demo">
-        <div className="demo-head">
-          <h2>Try it</h2>
-          <p>Type a typo, add a space, then press Backspace.</p>
+        <div className="eyebrow">
+          <span className="label">Demo</span>
+          <span className="muted">Type a typo, add a space, then press Backspace.</span>
         </div>
 
         <textarea
@@ -91,53 +93,63 @@ function App() {
           aria-label="Typo demo field"
         />
 
-        <div className="hint" aria-live="polite">
-          {pending ? (
-            <>
-              <span className="from">{pending.word}</span>
-              <span className="arrow">→</span>
-              <span className="to">{pending.corrected}</span>
-              <span className="sep">·</span>
-              <span className="action">Press Delete to apply</span>
-            </>
-          ) : (
-            <span className="muted">Waiting for a typo + boundary…</span>
-          )}
-        </div>
+        <div className="demo-foot">
+          <div className="hint" aria-live="polite">
+            {pending ? (
+              <>
+                <span className="from">{pending.word}</span>
+                <span className="arrow">→</span>
+                <span className="to">{pending.corrected}</span>
+                <span className="sep">·</span>
+                <span className="action">Press Delete to apply</span>
+              </>
+            ) : (
+              <span className="muted">Waiting for a typo…</span>
+            )}
+          </div>
 
-        <div className="chips">
-          {examples.map((word) => (
-            <button
-              key={word}
-              type="button"
-              onClick={() => setText(`${word} `)}
-            >
-              {word}
+          <div className="chips">
+            {examples.map((word) => (
+              <button
+                key={word}
+                type="button"
+                onClick={() => setText(`${word} `)}
+              >
+                {word}
+              </button>
+            ))}
+            <button type="button" onClick={() => setText("")}>
+              Clear
             </button>
-          ))}
-          <button
-            type="button"
-            className="chip-clear"
-            onClick={() => setText("")}
-          >
-            Clear
-          </button>
+          </div>
         </div>
       </section>
 
       <section className="how">
+        <div className="eyebrow">
+          <span className="label">How it works</span>
+        </div>
         <ol>
           <li>
             <span className="num">01</span>
-            <b>Watch.</b> A short buffer tracks the word you&rsquo;re typing.
+            <div>
+              <b>Watch</b>
+              <p>A short buffer tracks the word you&rsquo;re typing.</p>
+            </div>
           </li>
           <li>
             <span className="num">02</span>
-            <b>Check.</b> At a space or punctuation, macOS spell-check runs locally.
+            <div>
+              <b>Check</b>
+              <p>At a space or punctuation, macOS spell-check runs locally.</p>
+            </div>
           </li>
           <li>
             <span className="num">03</span>
-            <b>Apply.</b> Press Delete and Typro swaps the word, keeping the boundary.
+            <div>
+              <b>Apply</b>
+              <p>Press Delete and Typro swaps the word, keeping the boundary.</p>
+            </div>
           </li>
         </ol>
       </section>
