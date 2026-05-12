@@ -9,3 +9,5 @@ DerivedData/
 website/node_modules/
 website/dist/
 website/tsconfig.tsbuildinfo
+dist/
+typro-v*.zip

@@ -19,12 +19,23 @@ The selection happens instantly after you type the word boundary (space or punct
 - macOS 14 (Sonoma) or later
 - Xcode command-line tools (`xcode-select --install`)
 
-## Run
+## Install
+
+**Option 1 — prebuilt release (fastest)**
+
+Grab the latest zip from [Releases](https://github.com/SimonSaysGiveMeSmile/typro/releases/latest), unzip it, and run:
+
+```bash
+./install.sh          # installs typro-fix CLI + zsh integration
+open Typro            # launches the menu-bar app
+```
+
+**Option 2 — build from source**
 
 ```bash
 git clone https://github.com/SimonSaysGiveMeSmile/typro
 cd typro
-swift run
+swift run Typro
 ```
 
 On first launch, Typro will ask for **Accessibility permission** — this is required to monitor keystrokes and post selection events.

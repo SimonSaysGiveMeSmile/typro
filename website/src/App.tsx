@@ -68,7 +68,12 @@ function App() {
             wrong letters at the end of the word. Hit Delete, retype, move on.
           </p>
           <div className="cta">
-            <a className="btn primary" href="/download/typro-project.zip" download>
+            <a
+              className="btn primary"
+              href="https://github.com/SimonSaysGiveMeSmile/typro/releases/latest"
+              target="_blank"
+              rel="noreferrer"
+            >
               Download
             </a>
             <a className="btn ghost" href="#demo">Try the demo</a>
@@ -160,7 +165,13 @@ function App() {
         </div>
         <div className="foot-links">
           <a href="https://github.com/SimonSaysGiveMeSmile/typro">Source</a>
-          <a href="/download/typro-project.zip" download>Download ZIP</a>
+          <a
+            href="https://github.com/SimonSaysGiveMeSmile/typro/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Releases
+          </a>
         </div>
       </footer>
     </main>
