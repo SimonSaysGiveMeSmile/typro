@@ -51,9 +51,9 @@ function useTypingDemo() {
     const seq: [string, number][] = [
       // type "Fix ptypso " with typo
       ["F", 80], ["Fi", 80], ["Fix", 80], ["Fix ", 80],
-      ["Fix p", 80], ["Fix pt", 80], ["Fix pty", 80], ["Fix ptyp", 80], ["Fix ptyps", 80], ["Fix ptypso", 80],
-      ["Fix ptypso ", 80],
-      // instant auto-correct: "ptypso" → "typos"
+      ["Fix t", 80], ["Fix ty", 80], ["Fix typ", 80], ["Fix typs", 80], ["Fix typso", 80],
+      ["Fix typso ", 80],
+      // instant auto-correct: "typso" → "typos"
       ["Fix typos ", 400],
       // continue typing the rest
       ["Fix typos o", 80], ["Fix typos on", 80], ["Fix typos on ", 80],
