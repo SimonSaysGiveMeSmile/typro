@@ -17,8 +17,11 @@ final class TypoEngine {
 
     // Track rapid backspaces to promote to word-delete.
     private var backspaceHistory: [Date] = []
-    private let rapidBackspaceThreshold = 3
+    private let rapidBackspaceThreshold = 2
     private let rapidBackspaceWindow: TimeInterval = 0.45
+
+    // Last non-space punctuation boundary ("," "." "!" "?"), used to detect missing-space-after-punct.
+    private var lastPunctBoundary: String?
 
     private let autoFixConfidenceThreshold: Double = 0.8
 
@@ -39,6 +42,7 @@ final class TypoEngine {
         stateQueue.sync {
             buffer.removeAll(); pending = nil
             spaceGuardUntil = nil; backspaceHistory.removeAll()
+            lastPunctBoundary = nil
         }
     }
 
@@ -51,6 +55,7 @@ final class TypoEngine {
         guard TyproSettings.shared.shouldActivate(forBundleID: frontBundleID) else {
             buffer.removeAll(); pending = nil
             spaceGuardUntil = nil; backspaceHistory.removeAll()
+            lastPunctBoundary = nil
             return false
         }
 
@@ -65,18 +70,48 @@ final class TypoEngine {
 
         switch event.kind {
         case .character(let s):
+            // Active apostrophe fix: ";" or ":" in a letter context becomes "'".
+            if s == ";" || s == ":", !buffer.isEmpty, buffer.last?.isLetter == true {
+                NSLog("[Typro] active apostrophe fix: '\(s)' → '")
+                DispatchQueue.global(qos: .userInitiated).async { KeyPoster.type("'") }
+                buffer.append("'")
+                lastPunctBoundary = nil
+                return true
+            }
+
             if s.count == 1, s.first?.isLetter == true {
+                // Missing space after punctuation: last boundary was "," "." "!" "?".
+                // Insert a space before this letter.
+                if let prev = lastPunctBoundary, prev != "" {
+                    NSLog("[Typro] missing-space after '\(prev)' → inserting space")
+                    let letter = s
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        KeyPoster.type(" " + letter)
+                    }
+                    buffer = letter
+                    lastPunctBoundary = nil
+                    return true
+                }
                 buffer.append(s)
             } else {
                 buffer.removeAll()
             }
+            lastPunctBoundary = nil
 
         case .caretMove, .modifierCombo:
             buffer.removeAll()
+            lastPunctBoundary = nil
 
         case .wordBoundary(let boundary):
             let word = buffer
             buffer.removeAll()
+
+            // Track whether this boundary is punctuation that should be followed by a space.
+            if boundary == "," || boundary == "." || boundary == "!" || boundary == "?" {
+                lastPunctBoundary = boundary
+            } else {
+                lastPunctBoundary = nil
+            }
 
             if word.isEmpty && PunctuationFixer.isSpaceBeforePunct(boundary) {
                 pending = (" ", boundary, "")
@@ -99,6 +134,9 @@ final class TypoEngine {
     }
 
     private func handleBackspace() -> Bool {
+        // Any backspace invalidates missing-space-after-punct tracking.
+        lastPunctBoundary = nil
+
         // 1. Recent space inserted by us? Swallow this BS so the space survives.
         if let until = spaceGuardUntil, Date() < until {
             NSLog("[Typro] space-guard: swallow BS")
