@@ -137,7 +137,9 @@ final class TypoEngine {
         switch event.kind {
         case .character(let s):
             // Active apostrophe fix: ";" or ":" in a letter context becomes "'".
-            if s == ";" || s == ":", !buffer.isEmpty, buffer.last?.isLetter == true {
+            // Also fires when buffer is empty but the last typed char was a letter (e.g. "said;hello").
+            if s == ";" || s == ":",
+               buffer.last?.isLetter == true || (buffer.isEmpty && lastChar?.isLetter == true) {
                 NSLog("[Typro] active apostrophe fix: '\(s)' → '")
                 CorrectionLog.shared.record(.activeApostrophe, typed: s, correction: "'", app: frontBundleID)
                 DispatchQueue.global(qos: .userInitiated).async { KeyPoster.type("'") }

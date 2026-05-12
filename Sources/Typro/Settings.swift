@@ -28,7 +28,7 @@ final class TyproSettings {
     func bootstrap() {
         defaults.register(defaults: [
             Keys.enabled: true,
-            Keys.minWordLength: 4,
+            Keys.minWordLength: 3,
             Keys.allowlistMode: AllowlistMode.everywhere.rawValue,
             Keys.bundleIDs: [String](),
             Keys.language: "en",
