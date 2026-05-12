@@ -1,4 +1,4 @@
-import { KeyboardEvent, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useState } from "react";
 
 type PendingFix = {
   word: string;
@@ -43,9 +43,29 @@ function findPendingFix(value: string): PendingFix | null {
   };
 }
 
+type Theme = "system" | "light" | "dark";
+const themes: Theme[] = ["system", "light", "dark"];
+const themeLabel: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
+
 function App() {
   const [text, setText] = useState("");
   const pending = useMemo(() => findPendingFix(text), [text]);
+  const [theme, setTheme] = useState<Theme>(() => {
+    if (typeof window === "undefined") return "system";
+    return (window.localStorage.getItem("typro-theme") as Theme) || "system";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "system") root.removeAttribute("data-theme");
+    else root.setAttribute("data-theme", theme);
+    window.localStorage.setItem("typro-theme", theme);
+  }, [theme]);
+
+  const cycleTheme = () => {
+    const next = themes[(themes.indexOf(theme) + 1) % themes.length];
+    setTheme(next);
+  };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Backspace" || !pending) return;
@@ -60,7 +80,15 @@ function App() {
           <img src="/icon.png" alt="" className="brand-icon" width={24} height={24} />
           <span className="wordmark">Typro</span>
         </span>
-        <span className="tag">On-device</span>
+        <button
+          type="button"
+          className="tag theme-toggle"
+          onClick={cycleTheme}
+          aria-label={`Theme: ${themeLabel[theme]}. Click to change.`}
+          title={`Theme: ${themeLabel[theme]}`}
+        >
+          {themeLabel[theme]}
+        </button>
       </header>
 
       <section className="hero">
@@ -79,7 +107,6 @@ function App() {
             >
               Download
             </a>
-            <a className="btn ghost" href="#demo">Try the demo</a>
           </div>
         </div>
       </section>
