@@ -15,6 +15,9 @@ final class CorrectionLog {
         case spaceBeforePunct = "space_punct"  // " ," → ","
         case missingSpaceAfterPunct = "missing_space"
         case activeApostrophe = "apostrophe"   // ; or : converted to '
+        case doubleSpace = "double_space"      // "a  b" → "a b"
+        case capitalI = "capital_i"            // lone "i " → "I "
+        case prediction = "prediction"         // Tab-completed a word
     }
 
     private let queue = DispatchQueue(label: "typro.correctionlog", qos: .utility)

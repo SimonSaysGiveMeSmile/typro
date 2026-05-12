@@ -7,6 +7,7 @@ struct KeyEvent {
         case character(String)
         case wordBoundary(String)   // space / punctuation that ended a word
         case backspace
+        case tab                     // standalone Tab — may commit a prediction
         case caretMove               // arrow keys, enter, tab — reset buffer
         case modifierCombo           // cmd+x etc — reset buffer
     }
@@ -33,8 +34,11 @@ extension KeyEvent {
         case kVK_Delete, kVK_ForwardDelete:
             self = KeyEvent(kind: .backspace, keyCode: keyCode, flags: flags)
             return
+        case kVK_Tab:
+            self = KeyEvent(kind: .tab, keyCode: keyCode, flags: flags)
+            return
         case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow,
-             kVK_Return, kVK_Tab, kVK_Escape, kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
+             kVK_Return, kVK_Escape, kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
             self = KeyEvent(kind: .caretMove, keyCode: keyCode, flags: flags)
             return
         default:

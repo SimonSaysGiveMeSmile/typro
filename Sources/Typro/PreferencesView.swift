@@ -7,6 +7,8 @@ struct PreferencesView: View {
     @State private var mode: TyproSettings.AllowlistMode = TyproSettings.shared.allowlistMode
     @State private var bundleIDs: [String] = TyproSettings.shared.bundleIDs
     @State private var language: String = TyproSettings.shared.language
+    @State private var predictionsEnabled: Bool = TyproSettings.shared.predictionsEnabled
+    @State private var capitalizeI: Bool = TyproSettings.shared.capitalizeI
     @State private var newBundleID: String = ""
 
     private let languages: [(label: String, code: String)] = [
@@ -33,6 +35,15 @@ struct PreferencesView: View {
                     }
                 }
                 .onChange(of: language) { TyproSettings.shared.language = language }
+                Toggle("Capitalize lone \"i\" → \"I\"", isOn: $capitalizeI)
+                    .onChange(of: capitalizeI) { TyproSettings.shared.capitalizeI = capitalizeI }
+            }
+            Section("Prediction (experimental)") {
+                Toggle("Enable Tab to complete word", isOn: $predictionsEnabled)
+                    .onChange(of: predictionsEnabled) { TyproSettings.shared.predictionsEnabled = predictionsEnabled }
+                Text("Uses the on-device system dictionary. Press Tab mid-word to accept the top completion.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
             Section("App Filter") {
                 Picker("Mode", selection: $mode) {

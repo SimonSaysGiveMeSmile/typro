@@ -4,11 +4,18 @@ import AppKit
 final class TypoEngine {
     private let monitor = KeyMonitor()
     private let suggester = SuggestionEngine()
+    private let predictor = PredictionEngine()
 
     private let stateQueue = DispatchQueue(label: "typro.state")
     private var buffer: String = ""
 
     private var pending: (typed: String, correction: String, boundary: String)?
+
+    // Active prediction: if non-nil, Tab will commit these remaining characters.
+    private var predictionRemainder: String?
+
+    // Track the previous character to detect double-space and i-alone fixes.
+    private var lastChar: Character?
 
     // Guard the space we just appended after an autofix. If the user hits backspace
     // within this window, their BS is likely racing the just-inserted space — swallow it.
@@ -43,6 +50,9 @@ final class TypoEngine {
             buffer.removeAll(); pending = nil
             spaceGuardUntil = nil; backspaceHistory.removeAll()
             lastPunctBoundary = nil
+            predictionRemainder = nil
+            lastChar = nil
+            predictor.clearCache()
         }
     }
 
@@ -56,14 +66,34 @@ final class TypoEngine {
             buffer.removeAll(); pending = nil
             spaceGuardUntil = nil; backspaceHistory.removeAll()
             lastPunctBoundary = nil
+            predictionRemainder = nil; lastChar = nil
             return false
         }
 
         if case .backspace = event.kind {
+            predictionRemainder = nil
             return handleBackspace(app: frontBundleID)
         }
 
-        // Any non-backspace clears rapid-delete state.
+        if case .tab = event.kind {
+            if let remainder = predictionRemainder, !remainder.isEmpty {
+                let committed = buffer + remainder
+                NSLog("[Typro] prediction commit via Tab: '\(buffer)' → '\(committed)'")
+                CorrectionLog.shared.record(.prediction, typed: buffer, correction: committed, app: frontBundleID)
+                predictionRemainder = nil
+                let copy = remainder
+                DispatchQueue.global(qos: .userInitiated).async { KeyPoster.type(copy) }
+                buffer.append(copy)
+                lastChar = copy.last
+                return true
+            }
+            // No active prediction — let Tab do its normal thing, but clear word state.
+            buffer.removeAll(); lastChar = nil
+            lastPunctBoundary = nil
+            return false
+        }
+
+        // Any non-backspace, non-tab clears rapid-delete state.
         backspaceHistory.removeAll()
         pending = nil
         spaceGuardUntil = nil
@@ -77,6 +107,8 @@ final class TypoEngine {
                 DispatchQueue.global(qos: .userInitiated).async { KeyPoster.type("'") }
                 buffer.append("'")
                 lastPunctBoundary = nil
+                lastChar = "'"
+                predictionRemainder = nil
                 return true
             }
 
@@ -90,27 +122,66 @@ final class TypoEngine {
                     }
                     buffer = letter
                     lastPunctBoundary = nil
+                    lastChar = letter.last
+                    predictionRemainder = nil
                     return true
                 }
                 buffer.append(s)
+                lastChar = s.last
+                schedulePrediction(app: frontBundleID)
             } else {
                 buffer.removeAll()
+                predictionRemainder = nil
+                lastChar = s.last
             }
             lastPunctBoundary = nil
 
         case .caretMove, .modifierCombo:
             buffer.removeAll()
             lastPunctBoundary = nil
+            predictionRemainder = nil
+            lastChar = nil
+
+        case .tab:
+            break
 
         case .wordBoundary(let boundary):
             let word = buffer
             buffer.removeAll()
+            predictionRemainder = nil
+
+            // Double space collapse: user pressed space twice.
+            if boundary == " " && lastChar == " " {
+                NSLog("[Typro] double space → collapsing")
+                CorrectionLog.shared.record(.doubleSpace, typed: "  ", correction: " ", app: frontBundleID)
+                DispatchQueue.global(qos: .userInitiated).async { KeyPoster.backspace(1) }
+                lastChar = " "
+                lastPunctBoundary = nil
+                return true
+            }
+
+            // Capital-I fix: lone lowercase "i" followed by space/punct boundary → "I".
+            if TyproSettings.shared.capitalizeI,
+               word == "i",
+               boundary == " " || boundary == "." || boundary == "," || boundary == "!" || boundary == "?" {
+                NSLog("[Typro] capital I fix: 'i' → 'I'")
+                CorrectionLog.shared.record(.capitalI, typed: "i" + boundary, correction: "I" + boundary, boundary: boundary, app: frontBundleID)
+                autoApply(typed: "i", correction: "I", boundary: boundary)
+                lastChar = boundary.last
+                if boundary == "," || boundary == "." || boundary == "!" || boundary == "?" {
+                    lastPunctBoundary = boundary
+                } else {
+                    lastPunctBoundary = nil
+                }
+                return false
+            }
 
             if boundary == "," || boundary == "." || boundary == "!" || boundary == "?" {
                 lastPunctBoundary = boundary
             } else {
                 lastPunctBoundary = nil
             }
+            lastChar = boundary.last
 
             if word.isEmpty && PunctuationFixer.isSpaceBeforePunct(boundary) {
                 pending = (" ", boundary, "")
@@ -243,6 +314,24 @@ final class TypoEngine {
         NSLog("[Typro] no suggestion, deleting whole word '\(word)'")
         DispatchQueue.global(qos: .userInitiated).async {
             KeyPoster.backspace(word.count)
+        }
+    }
+
+    private func schedulePrediction(app: String?) {
+        guard TyproSettings.shared.predictionsEnabled else {
+            predictionRemainder = nil
+            return
+        }
+        let snapshot = buffer
+        let language = TyproSettings.shared.language
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            let remainder = self.predictor.remainder(forPrefix: snapshot, language: language)
+            self.stateQueue.async {
+                // Only accept the prediction if the buffer hasn't drifted.
+                guard self.buffer == snapshot else { return }
+                self.predictionRemainder = remainder
+            }
         }
     }
 }

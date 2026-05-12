@@ -13,6 +13,8 @@ final class TyproSettings {
         static let allowlistMode = "typro.allowlistMode"
         static let bundleIDs = "typro.bundleIDs"
         static let language = "typro.language"
+        static let predictionsEnabled = "typro.predictionsEnabled"
+        static let capitalizeI = "typro.capitalizeI"
     }
 
     enum AllowlistMode: String {
@@ -27,7 +29,9 @@ final class TyproSettings {
             Keys.minWordLength: 4,
             Keys.allowlistMode: AllowlistMode.everywhere.rawValue,
             Keys.bundleIDs: [String](),
-            Keys.language: "en"
+            Keys.language: "en",
+            Keys.predictionsEnabled: false,
+            Keys.capitalizeI: true
         ])
     }
 
@@ -54,6 +58,16 @@ final class TyproSettings {
     var language: String {
         get { defaults.string(forKey: Keys.language) ?? "en" }
         set { defaults.set(newValue, forKey: Keys.language); onChange?() }
+    }
+
+    var predictionsEnabled: Bool {
+        get { defaults.bool(forKey: Keys.predictionsEnabled) }
+        set { defaults.set(newValue, forKey: Keys.predictionsEnabled); onChange?() }
+    }
+
+    var capitalizeI: Bool {
+        get { defaults.bool(forKey: Keys.capitalizeI) }
+        set { defaults.set(newValue, forKey: Keys.capitalizeI); onChange?() }
     }
 
     func shouldActivate(forBundleID id: String?) -> Bool {
