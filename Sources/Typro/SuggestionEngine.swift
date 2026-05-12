@@ -8,6 +8,9 @@ struct TypoSuggestion {
     let wrongSuffixLength: Int
     /// Rough confidence in [0, 1]. 1.0 = near-certain, 0.0 = unsure.
     let confidence: Double
+    /// Up to ~5 alternate candidates from the spell checker (including `suggestion`),
+    /// ordered by NSSpellChecker's preference. Used by contextual re-rank.
+    let candidates: [String]
 }
 
 final class SuggestionEngine {
@@ -35,7 +38,8 @@ final class SuggestionEngine {
 
         let confidence = scoreConfidence(typed: word, suggestion: top, guesses: guesses, prefixLen: prefix)
 
-        return TypoSuggestion(typed: word, suggestion: top, wrongSuffixLength: suffixLen, confidence: confidence)
+        let candidates = Array(guesses.prefix(5))
+        return TypoSuggestion(typed: word, suggestion: top, wrongSuffixLength: suffixLen, confidence: confidence, candidates: candidates)
     }
 
     private func scoreConfidence(typed: String, suggestion: String, guesses: [String], prefixLen: Int) -> Double {

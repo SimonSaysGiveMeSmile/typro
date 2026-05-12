@@ -15,6 +15,8 @@ final class TyproSettings {
         static let language = "typro.language"
         static let predictionsEnabled = "typro.predictionsEnabled"
         static let capitalizeI = "typro.capitalizeI"
+        static let sentenceCapEnabled = "typro.sentenceCap"
+        static let contextRerank = "typro.contextRerank"
     }
 
     enum AllowlistMode: String {
@@ -31,7 +33,9 @@ final class TyproSettings {
             Keys.bundleIDs: [String](),
             Keys.language: "en",
             Keys.predictionsEnabled: false,
-            Keys.capitalizeI: true
+            Keys.capitalizeI: true,
+            Keys.sentenceCapEnabled: true,
+            Keys.contextRerank: false
         ])
     }
 
@@ -68,6 +72,16 @@ final class TyproSettings {
     var capitalizeI: Bool {
         get { defaults.bool(forKey: Keys.capitalizeI) }
         set { defaults.set(newValue, forKey: Keys.capitalizeI); onChange?() }
+    }
+
+    var sentenceCapEnabled: Bool {
+        get { defaults.bool(forKey: Keys.sentenceCapEnabled) }
+        set { defaults.set(newValue, forKey: Keys.sentenceCapEnabled); onChange?() }
+    }
+
+    var contextRerank: Bool {
+        get { defaults.bool(forKey: Keys.contextRerank) }
+        set { defaults.set(newValue, forKey: Keys.contextRerank); onChange?() }
     }
 
     func shouldActivate(forBundleID id: String?) -> Bool {

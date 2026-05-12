@@ -30,7 +30,17 @@ final class TypoEngine {
     // Last non-space punctuation boundary ("," "." "!" "?"), used to detect missing-space-after-punct.
     private var lastPunctBoundary: String?
 
+    // True when the last boundary emitted was a sentence-ender followed by a space
+    // (". ", "! ", "? "). Drives auto-capitalize of the next letter.
+    private var pendingSentenceCap: Bool = false
+
+    // Short rolling context fed to Foundation Models for contextual re-rank.
+    // Only built when prediction is enabled; cheap ring-buffer cap.
+    private var recentContext: String = ""
+    private let recentContextCap = 240
+
     private let autoFixConfidenceThreshold: Double = 0.8
+    private let contextRerankMinConfidence: Double = 0.35
 
     func start() {
         monitor.shouldSwallow = { [weak self] event in
@@ -52,6 +62,8 @@ final class TypoEngine {
             lastPunctBoundary = nil
             predictionRemainder = nil
             lastChar = nil
+            pendingSentenceCap = false
+            recentContext.removeAll()
             predictor.clearCache()
         }
     }
@@ -124,15 +136,38 @@ final class TypoEngine {
                     lastPunctBoundary = nil
                     lastChar = letter.last
                     predictionRemainder = nil
+                    pendingSentenceCap = false
+                    appendContext(" " + letter)
                     return true
                 }
+
+                // Auto-capitalize first letter after ". " / "! " / "? ".
+                if pendingSentenceCap, TyproSettings.shared.sentenceCapEnabled,
+                   let ch = s.first, ch.isLowercase {
+                    let upper = String(ch).uppercased()
+                    NSLog("[Typro] sentence cap: '\(s)' → '\(upper)'")
+                    CorrectionLog.shared.record(.sentenceCap, typed: s, correction: upper, app: frontBundleID)
+                    DispatchQueue.global(qos: .userInitiated).async {
+                        KeyPoster.type(upper)
+                    }
+                    buffer.append(upper)
+                    lastChar = upper.last
+                    pendingSentenceCap = false
+                    appendContext(upper)
+                    return true
+                }
+
                 buffer.append(s)
                 lastChar = s.last
+                pendingSentenceCap = false
+                appendContext(s)
                 schedulePrediction(app: frontBundleID)
             } else {
                 buffer.removeAll()
                 predictionRemainder = nil
                 lastChar = s.last
+                pendingSentenceCap = false
+                appendContext(s)
             }
             lastPunctBoundary = nil
 
@@ -149,6 +184,7 @@ final class TypoEngine {
             let word = buffer
             buffer.removeAll()
             predictionRemainder = nil
+            if !word.isEmpty { appendContext(word) }
 
             // Double space collapse: user pressed space twice.
             if boundary == " " && lastChar == " " {
@@ -181,7 +217,18 @@ final class TypoEngine {
             } else {
                 lastPunctBoundary = nil
             }
+
+            // After ". ", "! ", or "? " a new sentence begins — arm sentence cap.
+            if boundary == " ",
+               let prev = lastChar,
+               prev == "." || prev == "!" || prev == "?" {
+                pendingSentenceCap = true
+            } else if boundary != "." && boundary != "!" && boundary != "?" {
+                pendingSentenceCap = false
+            }
+
             lastChar = boundary.last
+            appendContext(boundary)
 
             if word.isEmpty && PunctuationFixer.isSpaceBeforePunct(boundary) {
                 pending = (" ", boundary, "")
@@ -260,6 +307,7 @@ final class TypoEngine {
 
     private func scheduleSpellSuggest(word: String, boundary: String, app: String?) {
         let language = TyproSettings.shared.language
+        let context = recentContext
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self else { return }
             guard let s = self.suggester.suggest(for: word, language: language) else { return }
@@ -268,11 +316,36 @@ final class TypoEngine {
                 CorrectionLog.shared.record(.autoApply, typed: s.typed, correction: s.suggestion, boundary: boundary, confidence: s.confidence, app: app)
                 self.autoApply(typed: s.typed, correction: s.suggestion, boundary: boundary)
             } else {
-                self.stateQueue.async {
-                    NSLog("[Typro] pending (conf \(String(format: "%.2f", s.confidence))): '\(s.typed)' → '\(s.suggestion)'")
-                    CorrectionLog.shared.record(.pending, typed: s.typed, correction: s.suggestion, boundary: boundary, confidence: s.confidence, app: app)
-                    self.pending = (s.typed, s.suggestion, boundary)
-                }
+                self.stageSuggestion(s, boundary: boundary, app: app)
+                self.maybeContextRerank(word: word, candidates: s.candidates,
+                                        boundary: boundary, context: context, app: app)
+            }
+        }
+    }
+
+    private func stageSuggestion(_ s: TypoSuggestion, boundary: String, app: String?) {
+        stateQueue.async {
+            NSLog("[Typro] pending (conf \(String(format: "%.2f", s.confidence))): '\(s.typed)' → '\(s.suggestion)'")
+            CorrectionLog.shared.record(.pending, typed: s.typed, correction: s.suggestion, boundary: boundary, confidence: s.confidence, app: app)
+            self.pending = (s.typed, s.suggestion, boundary)
+        }
+    }
+
+    private func maybeContextRerank(word: String, candidates: [String], boundary: String,
+                                    context: String, app: String?) {
+        guard TyproSettings.shared.contextRerank,
+              ContextualLM.shared.isAvailable,
+              candidates.count >= 2 else { return }
+        ContextualLM.shared.rerank(candidates: candidates, context: context) { [weak self] choice in
+            guard let self, let pick = choice else { return }
+            self.stateQueue.async {
+                // Only swap if the staged pending is still this word and the LM picked
+                // something different from the spell-checker's top suggestion.
+                guard let p = self.pending, p.typed == word,
+                      p.correction.lowercased() != pick.lowercased() else { return }
+                NSLog("[Typro] context rerank: '\(p.correction)' → '\(pick)'")
+                CorrectionLog.shared.record(.contextRerank, typed: word, correction: pick, boundary: boundary, app: app)
+                self.pending = (word, pick, boundary)
             }
         }
     }
@@ -332,6 +405,13 @@ final class TypoEngine {
                 guard self.buffer == snapshot else { return }
                 self.predictionRemainder = remainder
             }
+        }
+    }
+
+    private func appendContext(_ s: String) {
+        recentContext.append(s)
+        if recentContext.count > recentContextCap {
+            recentContext.removeFirst(recentContext.count - recentContextCap)
         }
     }
 }
