@@ -161,14 +161,6 @@ button, textarea { font: inherit; }
 .theme-toggle:hover { color: var(--ink); background: var(--glass-bg-strong); border-color: var(--glass-border-strong); }
 
 /* Typing demo */
-.typing-demo {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: clamp(1rem, 1.6vw, 1.25rem);
-  color: var(--ink);
-  min-height: 1.6em;
-  display: flex;
-  align-items: center;
-}
 .typing-cursor {
   display: inline-block;
   width: 2px;

@@ -43,23 +43,35 @@ function findPendingFix(value: string): PendingFix | null {
   };
 }
 
-// Typing animation: types "I love typo ", backtracks, fixes to "Typro "
 function useTypingDemo() {
-  const [display, setDisplay] = useState("");
+  const [display, setDisplay] = useState("Fix typos on the go.");
   const frame = useRef(0);
 
   useEffect(() => {
-    // sequence: [text, pause_ms]
+    const pre = "Fix ";
     const seq: [string, number][] = [
-      ["I", 80], ["I ", 80], ["I l", 80], ["I lo", 80], ["I lov", 80], ["I love", 80], ["I love ", 80],
-      ["I love t", 80], ["I love ty", 80], ["I love typ", 80], ["I love typo", 80], ["I love typo ", 600],
-      // backspace "typo "
-      ["I love typo", 60], ["I love typ", 60], ["I love ty", 60], ["I love t", 60], ["I love ", 60],
-      // retype "Typro "
-      ["I love T", 80], ["I love Ty", 80], ["I love Typ", 80], ["I love Typr", 80], ["I love Typro", 80], ["I love Typro ", 1200],
-      // clear
-      ["I love Typro", 50], ["I love Typr", 50], ["I love Typ", 50], ["I love Ty", 50], ["I love T", 50],
-      ["I love ", 50], ["I love", 50], ["I lov", 50], ["I lo", 50], ["I l", 50], ["I ", 50], ["I", 50], ["", 300],
+      // type with typo "typso"
+      [pre + "t", 80], [pre + "ty", 80], [pre + "typ", 80], [pre + "typs", 80], [pre + "typso", 80],
+      [pre + "typso ", 80], [pre + "typso o", 80], [pre + "typso on", 80], [pre + "typso on ", 80],
+      [pre + "typso on t", 80], [pre + "typso on th", 80], [pre + "typso on the", 80],
+      [pre + "typso on the ", 80], [pre + "typso on the g", 80], [pre + "typso on the go", 80],
+      [pre + "typso on the go.", 900],
+      // backspace "typso" → "typ"
+      [pre + "typso on the go", 50], [pre + "typso on the g", 50], [pre + "typso on the ", 50],
+      [pre + "typso on the", 50], [pre + "typso on th", 50], [pre + "typso on t", 50],
+      [pre + "typso on ", 50], [pre + "typso on", 50], [pre + "typso o", 50], [pre + "typso ", 50],
+      [pre + "typso", 50], [pre + "typs", 50], [pre + "typ", 50],
+      // retype correctly "typos on the go."
+      [pre + "typo", 80], [pre + "typos", 80], [pre + "typos ", 80], [pre + "typos o", 80],
+      [pre + "typos on", 80], [pre + "typos on ", 80], [pre + "typos on t", 80],
+      [pre + "typos on th", 80], [pre + "typos on the", 80], [pre + "typos on the ", 80],
+      [pre + "typos on the g", 80], [pre + "typos on the go", 80], [pre + "typos on the go.", 1800],
+      // clear back to start
+      [pre + "typos on the go", 40], [pre + "typos on the g", 40], [pre + "typos on the ", 40],
+      [pre + "typos on the", 40], [pre + "typos on th", 40], [pre + "typos on t", 40],
+      [pre + "typos on ", 40], [pre + "typos on", 40], [pre + "typos o", 40], [pre + "typos ", 40],
+      [pre + "typos", 40], [pre + "typo", 40], [pre + "typ", 40], [pre + "ty", 40],
+      [pre + "t", 40], [pre, 300],
     ];
 
     let timeout: ReturnType<typeof setTimeout>;
@@ -69,7 +81,7 @@ function useTypingDemo() {
       frame.current = (frame.current + 1) % seq.length;
       timeout = setTimeout(step, delay);
     }
-    timeout = setTimeout(step, 400);
+    timeout = setTimeout(step, 1200);
     return () => clearTimeout(timeout);
   }, []);
 
@@ -126,11 +138,8 @@ function App() {
       </header>
 
       <section className="hero">
-        <h1>Fix typos on the go.</h1>
+        <h1><span>{typingDemo}</span><span className="typing-cursor" /></h1>
         <div className="hero-right">
-          <div className="typing-demo" aria-hidden="true">
-            <span className="typing-text">{typingDemo}</span><span className="typing-cursor" />
-          </div>
           <p className="lede">
             Typro watches your typing, spots typos on-device, and selects the
             wrong letters at the end of the word. Hit Delete, retype, move on.
