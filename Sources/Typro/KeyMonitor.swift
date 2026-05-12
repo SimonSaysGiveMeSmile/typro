@@ -5,11 +5,12 @@ import CoreGraphics
 struct KeyEvent {
     enum Kind {
         case character(String)
-        case wordBoundary(String)   // space / punctuation that ended a word
+        case wordBoundary(String)
         case backspace
-        case tab                     // standalone Tab — may commit a prediction
-        case caretMove               // arrow keys, enter, tab — reset buffer
-        case modifierCombo           // cmd+x etc — reset buffer
+        case tab
+        case escape
+        case caretMove
+        case modifierCombo
     }
     let kind: Kind
     let keyCode: CGKeyCode
@@ -38,8 +39,11 @@ extension KeyEvent {
             self = KeyEvent(kind: .tab, keyCode: keyCode, flags: flags)
             return
         case kVK_LeftArrow, kVK_RightArrow, kVK_UpArrow, kVK_DownArrow,
-             kVK_Return, kVK_Escape, kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
+             kVK_Return, kVK_Home, kVK_End, kVK_PageUp, kVK_PageDown:
             self = KeyEvent(kind: .caretMove, keyCode: keyCode, flags: flags)
+            return
+        case kVK_Escape:
+            self = KeyEvent(kind: .escape, keyCode: keyCode, flags: flags)
             return
         default:
             break

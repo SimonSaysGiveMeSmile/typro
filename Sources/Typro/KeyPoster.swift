@@ -43,6 +43,13 @@ enum KeyPoster {
         }
     }
 
+    static func selectAllAndDelete() {
+        guard let src = CGEventSource(stateID: .hidSystemState) else { return }
+        postKey(src: src, keyCode: CGKeyCode(kVK_ANSI_A), flags: .maskCommand)
+        usleep(interEventDelay)
+        postKey(src: src, keyCode: CGKeyCode(kVK_Delete), flags: [])
+    }
+
     private static func postKey(src: CGEventSource, keyCode: CGKeyCode, flags: CGEventFlags) {
         if let down = CGEvent(keyboardEventSource: src, virtualKey: keyCode, keyDown: true) {
             down.flags = flags

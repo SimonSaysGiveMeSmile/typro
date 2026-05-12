@@ -27,6 +27,10 @@ final class TypoEngine {
     private let rapidBackspaceThreshold = 2
     private let rapidBackspaceWindow: TimeInterval = 0.45
 
+    // Triple-Esc to clear the field.
+    private var escHistory: [Date] = []
+    private let tripleEscWindow: TimeInterval = 0.6
+
     // Last non-space punctuation boundary ("," "." "!" "?"), used to detect missing-space-after-punct.
     private var lastPunctBoundary: String?
 
@@ -64,6 +68,7 @@ final class TypoEngine {
             lastChar = nil
             pendingSentenceCap = false
             recentContext.removeAll()
+            escHistory.removeAll()
             predictor.clearCache()
         }
     }
@@ -79,6 +84,25 @@ final class TypoEngine {
             spaceGuardUntil = nil; backspaceHistory.removeAll()
             lastPunctBoundary = nil
             predictionRemainder = nil; lastChar = nil
+            return false
+        }
+
+        if case .escape = event.kind {
+            let now = Date()
+            escHistory = escHistory.filter { now.timeIntervalSince($0) < tripleEscWindow }
+            escHistory.append(now)
+            if escHistory.count >= 3 {
+                escHistory.removeAll()
+                buffer.removeAll(); pending = nil; predictionRemainder = nil
+                lastChar = nil; lastPunctBoundary = nil; pendingSentenceCap = false
+                NSLog("[Typro] triple-Esc → clear field")
+                CorrectionLog.shared.record(.clearField, typed: "", correction: "", app: frontBundleID)
+                DispatchQueue.global(qos: .userInitiated).async { KeyPoster.selectAllAndDelete() }
+                return true
+            }
+            // First/second Esc: pass through (lets apps dismiss dialogs etc.) but reset word state.
+            buffer.removeAll(); pending = nil; predictionRemainder = nil
+            lastChar = nil; lastPunctBoundary = nil; pendingSentenceCap = false
             return false
         }
 
@@ -171,7 +195,7 @@ final class TypoEngine {
             }
             lastPunctBoundary = nil
 
-        case .caretMove, .modifierCombo:
+        case .caretMove, .modifierCombo, .escape:
             buffer.removeAll()
             lastPunctBoundary = nil
             predictionRemainder = nil

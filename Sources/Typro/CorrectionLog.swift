@@ -20,6 +20,7 @@ final class CorrectionLog {
         case prediction = "prediction"         // Tab-completed a word
         case sentenceCap = "sentence_cap"      // ". a" → ". A"
         case contextRerank = "ctx_rerank"      // Foundation Models picked a candidate
+        case clearField = "clear_field"        // triple-Esc → select-all + delete
     }
 
     private let queue = DispatchQueue(label: "typro.correctionlog", qos: .utility)
