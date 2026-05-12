@@ -42,7 +42,34 @@ final class ContextualLM {
         #endif
     }
 
-    /// Given recent context and a set of candidates, return the best fit or nil on failure.
+    /// Predict the most likely next word given recent context. Returns nil if unavailable.
+    func predictNextWord(context: String, completion: @escaping (String?) -> Void) {
+        #if canImport(FoundationModels)
+        guard #available(macOS 26.0, *) else { completion(nil); return }
+        guard isAvailable else { completion(nil); return }
+
+        let trimmed = String(context.suffix(200))
+        let prompt = """
+            Context: "\(trimmed)"
+            What single word comes next? Reply with just that word, nothing else.
+            """
+        Task {
+            do {
+                guard let session = Self.session() else { completion(nil); return }
+                let response = try await session.respond(to: prompt)
+                let word = response.content
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "\"'.,!?"))
+                    .components(separatedBy: .whitespaces).first ?? ""
+                completion(word.isEmpty ? nil : word)
+            } catch {
+                completion(nil)
+            }
+        }
+        #else
+        completion(nil)
+        #endif
+    }
     /// Runs async on the caller's thread. Falls through to nil in ≤1.5s if the model stalls.
     func rerank(candidates: [String], context: String,
                 completion: @escaping (String?) -> Void) {

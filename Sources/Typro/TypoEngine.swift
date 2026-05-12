@@ -259,13 +259,18 @@ final class TypoEngine {
                 return false
             }
 
-            guard word.count >= TyproSettings.shared.minWordLength else { return false }
-
+            // Punctuation fix (apostrophe, etc.) — apply even for short words.
             if let fixed = PunctuationFixer.fix(word: word, boundary: boundary) {
                 CorrectionLog.shared.record(.punctuation, typed: word, correction: fixed, boundary: boundary, app: frontBundleID)
                 autoApply(typed: word, correction: fixed, boundary: boundary)
                 return false
             }
+
+            if boundary == " " {
+                scheduleNextWordPrediction(context: recentContext)
+            }
+
+            guard word.count >= TyproSettings.shared.minWordLength else { return false }
 
             scheduleSpellSuggest(word: word, boundary: boundary, app: frontBundleID)
 
@@ -425,9 +430,24 @@ final class TypoEngine {
             guard let self else { return }
             let remainder = self.predictor.remainder(forPrefix: snapshot, language: language)
             self.stateQueue.async {
-                // Only accept the prediction if the buffer hasn't drifted.
                 guard self.buffer == snapshot else { return }
                 self.predictionRemainder = remainder
+            }
+        }
+    }
+
+    // After a word boundary + space, ask FM to predict the next word.
+    // Stored as predictionRemainder so Tab commits it (typed as a full new word).
+    private func scheduleNextWordPrediction(context: String) {
+        guard TyproSettings.shared.predictionsEnabled,
+              TyproSettings.shared.contextRerank,
+              ContextualLM.shared.isAvailable else { return }
+        ContextualLM.shared.predictNextWord(context: context) { [weak self] word in
+            guard let self, let word else { return }
+            self.stateQueue.async {
+                // Only set if the user hasn't started typing a new word yet.
+                guard self.buffer.isEmpty else { return }
+                self.predictionRemainder = word
             }
         }
     }
