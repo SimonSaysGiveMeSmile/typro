@@ -16,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var engine: TypoEngine!
     private var prefsWindow: NSWindow?
+    private var dashboardWindow: NSWindow?
+    private var logTailer: LogTailer?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         TyproSettings.shared.bootstrap()
@@ -48,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: toggleTitle, action: #selector(toggleEnabled), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        menu.addItem(withTitle: "Dashboard…", action: #selector(openDashboard), keyEquivalent: "d")
         menu.addItem(withTitle: "Show Correction Log", action: #selector(showCorrectionLog), keyEquivalent: "")
         menu.addItem(withTitle: "Check Accessibility Permission", action: #selector(checkPermissions), keyEquivalent: "")
         menu.addItem(.separator())
@@ -66,6 +69,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             PermissionsHelper.promptForAccessibility()
         }
+    }
+
+    @objc private func openDashboard() {
+        if dashboardWindow == nil {
+            let tailer = LogTailer()
+            tailer.start()
+            logTailer = tailer
+            let hosting = NSHostingController(rootView: DashboardView(tailer: tailer))
+            let window = NSWindow(contentViewController: hosting)
+            window.title = "Typro Dashboard"
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            window.setContentSize(NSSize(width: 520, height: 600))
+            window.isReleasedWhenClosed = false
+            window.center()
+            dashboardWindow = window
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        dashboardWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func openPreferences() {

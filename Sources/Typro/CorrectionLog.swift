@@ -5,7 +5,7 @@ import Foundation
 final class CorrectionLog {
     static let shared = CorrectionLog()
 
-    enum Kind: String {
+    enum Kind: String, CaseIterable {
         case autoApply = "auto_apply"          // high-confidence fix applied at word boundary
         case pending = "pending"               // low-confidence suggestion staged
         case applyFromBackspace = "bs_apply"   // pending fix triggered by backspace
