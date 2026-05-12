@@ -160,6 +160,29 @@ button, textarea { font: inherit; }
 }
 .theme-toggle:hover { color: var(--ink); background: var(--glass-bg-strong); border-color: var(--glass-border-strong); }
 
+/* Typing demo */
+.typing-demo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: clamp(1rem, 1.6vw, 1.25rem);
+  color: var(--ink);
+  min-height: 1.6em;
+  display: flex;
+  align-items: center;
+}
+.typing-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  background: var(--ink);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
 /* Hero */
 .hero {
   display: grid;

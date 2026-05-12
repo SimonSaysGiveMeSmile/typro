@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 
 type PendingFix = {
   word: string;
@@ -43,11 +43,45 @@ function findPendingFix(value: string): PendingFix | null {
   };
 }
 
+// Typing animation: types "I love typo ", backtracks, fixes to "Typro "
+function useTypingDemo() {
+  const [display, setDisplay] = useState("");
+  const frame = useRef(0);
+
+  useEffect(() => {
+    // sequence: [text, pause_ms]
+    const seq: [string, number][] = [
+      ["I", 80], ["I ", 80], ["I l", 80], ["I lo", 80], ["I lov", 80], ["I love", 80], ["I love ", 80],
+      ["I love t", 80], ["I love ty", 80], ["I love typ", 80], ["I love typo", 80], ["I love typo ", 600],
+      // backspace "typo "
+      ["I love typo", 60], ["I love typ", 60], ["I love ty", 60], ["I love t", 60], ["I love ", 60],
+      // retype "Typro "
+      ["I love T", 80], ["I love Ty", 80], ["I love Typ", 80], ["I love Typr", 80], ["I love Typro", 80], ["I love Typro ", 1200],
+      // clear
+      ["I love Typro", 50], ["I love Typr", 50], ["I love Typ", 50], ["I love Ty", 50], ["I love T", 50],
+      ["I love ", 50], ["I love", 50], ["I lov", 50], ["I lo", 50], ["I l", 50], ["I ", 50], ["I", 50], ["", 300],
+    ];
+
+    let timeout: ReturnType<typeof setTimeout>;
+    function step() {
+      const [text, delay] = seq[frame.current % seq.length];
+      setDisplay(text);
+      frame.current = (frame.current + 1) % seq.length;
+      timeout = setTimeout(step, delay);
+    }
+    timeout = setTimeout(step, 400);
+    return () => clearTimeout(timeout);
+  }, []);
+
+  return display;
+}
+
 type Theme = "system" | "light" | "dark";
 const themes: Theme[] = ["system", "light", "dark"];
 const themeLabel: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
 
 function App() {
+  const typingDemo = useTypingDemo();
   const [text, setText] = useState("");
   const pending = useMemo(() => findPendingFix(text), [text]);
   const [theme, setTheme] = useState<Theme>(() => {
@@ -94,6 +128,9 @@ function App() {
       <section className="hero">
         <h1>Fix typos on the go.</h1>
         <div className="hero-right">
+          <div className="typing-demo" aria-hidden="true">
+            <span className="typing-text">{typingDemo}</span><span className="typing-cursor" />
+          </div>
           <p className="lede">
             Typro watches your typing, spots typos on-device, and selects the
             wrong letters at the end of the word. Hit Delete, retype, move on.
