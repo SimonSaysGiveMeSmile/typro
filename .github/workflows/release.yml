@@ -21,14 +21,31 @@ jobs:
 
       - name: Package artifacts
         run: |
-          mkdir -p dist
-          cp .build/release/Typro dist/
-          cp .build/release/typro-fix dist/
-          cp install.sh dist/
-          cd dist && zip -r ../typro-${{ github.ref_name }}.zip .
+          VERSION=${{ github.ref_name }}
+          mkdir -p Typro.app/Contents/MacOS Typro.app/Contents/Resources
+          cp .build/release/Typro Typro.app/Contents/MacOS/
+          cp AppIcon.icns Typro.app/Contents/Resources/
+          cat > Typro.app/Contents/Info.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>Typro</string>
+            <key>CFBundleIdentifier</key><string>com.typro.app</string>
+            <key>CFBundleName</key><string>Typro</string>
+            <key>CFBundleVersion</key><string>${VERSION#v}</string>
+            <key>CFBundleShortVersionString</key><string>${VERSION#v}</string>
+            <key>CFBundleIconFile</key><string>AppIcon</string>
+            <key>LSUIElement</key><true/>
+          </dict></plist>
+          EOF
+          zip -r Typro-${VERSION}.zip Typro.app
+          mkdir -p dist && cp .build/release/typro-fix dist/ && cp install.sh dist/
+          cd dist && zip -r ../typro-fix-${VERSION}.zip .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: typro-${{ github.ref_name }}.zip
+          files: |
+            Typro-${{ github.ref_name }}.zip
+            typro-fix-${{ github.ref_name }}.zip
           generate_release_notes: true
