@@ -77,7 +77,7 @@ function App() {
     <main className="page">
       <header className="nav">
         <span className="brand">
-          <img src="/icon.png" alt="" className="brand-icon" width={24} height={24} />
+          <img src="/new-icon.png" alt="" className="brand-icon" width={24} height={24} />
           <span className="wordmark">Typro</span>
         </span>
         <button
@@ -92,7 +92,7 @@ function App() {
       </header>
 
       <section className="hero">
-        <h1>Fix typos with one&nbsp;Delete.</h1>
+        <h1>Fix typos on the go.</h1>
         <div className="hero-right">
           <p className="lede">
             Typro watches your typing, spots typos on-device, and selects the
@@ -194,7 +194,7 @@ function App() {
           <p className="muted">macOS 14+ · Accessibility permission required.</p>
         </div>
         <div className="foot-links">
-          <a href="https://github.com/SimonSaysGiveMeSmile/typro">Source</a>
+          <a href="https://github.com/SimonSaysGiveMeSmile/typro">Git Repo</a>
           <a
             href="https://github.com/SimonSaysGiveMeSmile/typro/releases/latest"
             target="_blank"
