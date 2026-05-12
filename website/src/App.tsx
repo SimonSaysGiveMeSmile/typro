@@ -57,7 +57,7 @@ function App() {
     <main className="page">
       <header className="nav">
         <span className="wordmark">Typro</span>
-        <span className="tag">macOS · menu bar</span>
+        <span className="tag">On-device</span>
       </header>
 
       <section className="hero">
