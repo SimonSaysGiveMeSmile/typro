@@ -48,30 +48,24 @@ function useTypingDemo() {
   const frame = useRef(0);
 
   useEffect(() => {
-    const pre = "Fix ";
     const seq: [string, number][] = [
-      // type with typo "typso"
-      [pre + "t", 80], [pre + "ty", 80], [pre + "typ", 80], [pre + "typs", 80], [pre + "typso", 80],
-      [pre + "typso ", 80], [pre + "typso o", 80], [pre + "typso on", 80], [pre + "typso on ", 80],
-      [pre + "typso on t", 80], [pre + "typso on th", 80], [pre + "typso on the", 80],
-      [pre + "typso on the ", 80], [pre + "typso on the g", 80], [pre + "typso on the go", 80],
-      [pre + "typso on the go.", 900],
-      // backspace "typso" → "typ"
-      [pre + "typso on the go", 50], [pre + "typso on the g", 50], [pre + "typso on the ", 50],
-      [pre + "typso on the", 50], [pre + "typso on th", 50], [pre + "typso on t", 50],
-      [pre + "typso on ", 50], [pre + "typso on", 50], [pre + "typso o", 50], [pre + "typso ", 50],
-      [pre + "typso", 50], [pre + "typs", 50], [pre + "typ", 50],
-      // retype correctly "typos on the go."
-      [pre + "typo", 80], [pre + "typos", 80], [pre + "typos ", 80], [pre + "typos o", 80],
-      [pre + "typos on", 80], [pre + "typos on ", 80], [pre + "typos on t", 80],
-      [pre + "typos on th", 80], [pre + "typos on the", 80], [pre + "typos on the ", 80],
-      [pre + "typos on the g", 80], [pre + "typos on the go", 80], [pre + "typos on the go.", 1800],
-      // clear back to start
-      [pre + "typos on the go", 40], [pre + "typos on the g", 40], [pre + "typos on the ", 40],
-      [pre + "typos on the", 40], [pre + "typos on th", 40], [pre + "typos on t", 40],
-      [pre + "typos on ", 40], [pre + "typos on", 40], [pre + "typos o", 40], [pre + "typos ", 40],
-      [pre + "typos", 40], [pre + "typo", 40], [pre + "typ", 40], [pre + "ty", 40],
-      [pre + "t", 40], [pre, 300],
+      // type "Fix ptypso " with typo
+      ["F", 80], ["Fi", 80], ["Fix", 80], ["Fix ", 80],
+      ["Fix p", 80], ["Fix pt", 80], ["Fix pty", 80], ["Fix ptyp", 80], ["Fix ptyps", 80], ["Fix ptypso", 80],
+      ["Fix ptypso ", 80],
+      // instant auto-correct: "ptypso" → "typos"
+      ["Fix typos ", 400],
+      // continue typing the rest
+      ["Fix typos o", 80], ["Fix typos on", 80], ["Fix typos on ", 80],
+      ["Fix typos on t", 80], ["Fix typos on th", 80], ["Fix typos on the", 80],
+      ["Fix typos on the ", 80], ["Fix typos on the g", 80], ["Fix typos on the go", 80],
+      ["Fix typos on the go.", 2000],
+      // clear
+      ["Fix typos on the go", 40], ["Fix typos on the g", 40], ["Fix typos on the ", 40],
+      ["Fix typos on the", 40], ["Fix typos on th", 40], ["Fix typos on t", 40],
+      ["Fix typos on ", 40], ["Fix typos on", 40], ["Fix typos o", 40], ["Fix typos ", 40],
+      ["Fix typos", 40], ["Fix typo", 40], ["Fix typ", 40], ["Fix ty", 40], ["Fix t", 40],
+      ["Fix ", 40], ["Fix", 40], ["Fi", 40], ["F", 40], ["", 400],
     ];
 
     let timeout: ReturnType<typeof setTimeout>;
