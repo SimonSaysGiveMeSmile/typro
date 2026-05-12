@@ -92,6 +92,35 @@ type Theme = "system" | "light" | "dark";
 const themes: Theme[] = ["system", "light", "dark"];
 const themeLabel: Record<Theme, string> = { system: "Auto", light: "Light", dark: "Dark" };
 
+const ThemeIcon = ({ theme }: { theme: Theme }) => {
+  if (theme === "dark") return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <path d="M12.5 8.5A5.5 5.5 0 0 1 5.5 1.5a5.5 5.5 0 1 0 7 7z" fill="currentColor"/>
+    </svg>
+  );
+  if (theme === "light") return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="2.8" fill="currentColor"/>
+      <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+        <line x1="7" y1="0.5" x2="7" y2="2"/>
+        <line x1="7" y1="12" x2="7" y2="13.5"/>
+        <line x1="0.5" y1="7" x2="2" y2="7"/>
+        <line x1="12" y1="7" x2="13.5" y2="7"/>
+        <line x1="2.4" y1="2.4" x2="3.4" y2="3.4"/>
+        <line x1="10.6" y1="10.6" x2="11.6" y2="11.6"/>
+        <line x1="11.6" y1="2.4" x2="10.6" y2="3.4"/>
+        <line x1="3.4" y1="10.6" x2="2.4" y2="11.6"/>
+      </g>
+    </svg>
+  );
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+      <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.2"/>
+      <path d="M7 1a6 6 0 0 1 0 12V1z" fill="currentColor"/>
+    </svg>
+  );
+};
+
 function App() {
   const typingDemo = useTypingDemo();
   const [text, setText] = useState("");
@@ -133,7 +162,7 @@ function App() {
           aria-label={`Theme: ${themeLabel[theme]}. Click to change.`}
           title={`Theme: ${themeLabel[theme]}`}
         >
-          {themeLabel[theme]}
+          <ThemeIcon theme={theme} />
         </button>
       </header>
 
