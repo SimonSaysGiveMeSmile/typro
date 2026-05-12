@@ -56,7 +56,10 @@ function App() {
   return (
     <main className="page">
       <header className="nav">
-        <span className="wordmark">Typro</span>
+        <span className="brand">
+          <img src="/icon.png" alt="" className="brand-icon" width={24} height={24} />
+          <span className="wordmark">Typro</span>
+        </span>
         <span className="tag">On-device</span>
       </header>
 
