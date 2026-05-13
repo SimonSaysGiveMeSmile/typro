@@ -72,7 +72,8 @@ extension KeyEvent {
 
     private static func isWordBoundary(_ scalar: Unicode.Scalar) -> Bool {
         if CharacterSet.whitespacesAndNewlines.contains(scalar) { return true }
-        let punct: Set<Unicode.Scalar> = [".", ",", "!", "?", ";", ":", ")", "]", "}", "\"", "'", "—", "–", "-", "/"]
+        // ";" and ":" are NOT word boundaries — they appear mid-word as apostrophe substitutes (it;s → it's).
+        let punct: Set<Unicode.Scalar> = [".", ",", "!", "?", ")", "]", "}", "\"", "'", "—", "–", "-", "/"]
         return punct.contains(scalar)
     }
 }

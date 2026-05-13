@@ -60,7 +60,7 @@ final class SuggestionEngine {
         if prefixLen == 0 { score -= 0.15 }
 
         // Penalty for very short words — too many plausible neighbors.
-        if typed.count < 4 { score -= 0.15 }
+        if typed.count < 3 { score -= 0.15 }
 
         // Penalty for big length mismatches.
         let lenDiff = abs(typed.count - suggestion.count)

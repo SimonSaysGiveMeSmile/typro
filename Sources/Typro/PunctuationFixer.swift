@@ -10,7 +10,7 @@ enum PunctuationFixer {
     static func fix(word: String, boundary: String) -> String? {
         var result = word
 
-        // 1. Semicolon/colon used instead of apostrophe: I;ll → I'll, don;t → don't
+        // Semicolon/colon used instead of apostrophe: I;ll → I'll, don;t → don't
         if result.contains(";") || result.contains(":") {
             let fixed = apostrophePattern.stringByReplacingMatches(
                 in: result,
@@ -18,13 +18,6 @@ enum PunctuationFixer {
                 withTemplate: "'"
             )
             if fixed != result { result = fixed }
-        }
-
-        // 2. Trailing stray non-letter before punctuation boundary: "word/." → fix the word part
-        //    e.g. user typed "word/", boundary is "." → strip trailing non-alpha from word
-        if !boundary.isEmpty, let last = result.last, !last.isLetter, !last.isNumber, last != "'" {
-            let stripped = String(result.dropLast())
-            if !stripped.isEmpty { result = stripped }
         }
 
         return result == word ? nil : result

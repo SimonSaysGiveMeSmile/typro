@@ -29,26 +29,21 @@ final class PredictionEngine {
                                                      in: prefix,
                                                      language: language,
                                                      inSpellDocumentWithTag: 0),
-              let first = completions.first else {
+              !completions.isEmpty else {
             store(cacheKey, nil)
             return nil
         }
 
-        let firstLower = first.lowercased()
         let prefixLower = prefix.lowercased()
-        guard firstLower.hasPrefix(prefixLower), first.count > prefix.count else {
+        // Pick the shortest valid completion — avoids "predictably" beating "prediction".
+        guard let best = completions
+            .filter({ $0.lowercased().hasPrefix(prefixLower) && $0.count > prefix.count })
+            .min(by: { $0.count < $1.count }) else {
             store(cacheKey, nil)
             return nil
         }
 
-        // Skip if there are many competing completions — ambiguous.
-        if completions.count > 6 {
-            store(cacheKey, nil)
-            return nil
-        }
-
-        // Drop the prefix the user already typed — match their case exactly.
-        let remainder = String(first.dropFirst(prefix.count))
+        let remainder = String(best.dropFirst(prefix.count))
         store(cacheKey, remainder)
         return remainder
     }

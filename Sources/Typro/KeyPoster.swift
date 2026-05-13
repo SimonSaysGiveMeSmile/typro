@@ -8,7 +8,7 @@ enum KeyPoster {
     // so KeyMonitor can skip our own events without timing-based suppression.
     static let typroTag: Int64 = 0x54595052_4F310001  // "TYPRO1\x00\x01"
 
-    private static let interEventDelay: useconds_t = 3_000
+    private static let interEventDelay: useconds_t = 1_000
 
     static func backspace(_ count: Int = 1) {
         guard count > 0, let src = CGEventSource(stateID: .hidSystemState) else { return }
